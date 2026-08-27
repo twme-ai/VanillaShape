@@ -94,12 +94,29 @@ final class ShapeGeometry {
     }
 
     private static List<Box> fenceGate(final SpecialBlock block) {
+        final float p2 = 2 / 16f, p5 = 5 / 16f, p6 = 6 / 16f, p7 = 7 / 16f;
+        final float p8 = 8 / 16f, p9 = 9 / 16f, p10 = 10 / 16f, p12 = 12 / 16f;
+        final float p13 = 13 / 16f, p14 = 14 / 16f, p15 = 15 / 16f;
         if (has(block.flags(), SpecialBlock.OPEN)) {
-            return List.of(new Box(0, .3125f, 0, .1875f, .9375f, .5f),
-                    new Box(.8125f, .3125f, 0, 1, .9375f, .5f));
+            return List.of(
+                    new Box(0, p5, p7, p2, 1, p9),
+                    new Box(p14, p5, p7, 1, 1, p9),
+                    new Box(0, p6, p13, p2, p15, p15),
+                    new Box(p14, p6, p13, 1, p15, p15),
+                    new Box(0, p6, p9, p2, p9, p13),
+                    new Box(0, p12, p9, p2, p15, p13),
+                    new Box(p14, p6, p9, 1, p9, p13),
+                    new Box(p14, p12, p9, 1, p15, p13));
         }
-        return List.of(new Box(0, .375f, .4375f, 1, .5625f, .5625f),
-                new Box(0, .75f, .4375f, 1, .9375f, .5625f));
+        return List.of(
+                new Box(0, p5, p7, p2, 1, p9),
+                new Box(p14, p5, p7, 1, 1, p9),
+                new Box(p6, p6, p7, p8, p15, p9),
+                new Box(p8, p6, p7, p10, p15, p9),
+                new Box(p2, p6, p7, p6, p9, p9),
+                new Box(p2, p12, p7, p6, p15, p9),
+                new Box(p10, p6, p7, p14, p9, p9),
+                new Box(p10, p12, p7, p14, p15, p9));
     }
 
     private static List<Box> door(final SpecialBlock block) {

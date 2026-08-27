@@ -19,13 +19,15 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 final class BlockService {
     private static final Direction[] DIRECTIONS = Direction.values();
     private final VanillaShapePlugin plugin;
     private final BlockRepository repository;
-    private final Map<String, Map<BlockPosKey, SpecialBlock>> worlds = new HashMap<>();
+    private final Map<String, Map<BlockPosKey, SpecialBlock>> worlds = new ConcurrentHashMap<>();
+    private final Object mutationLock = new Object();
 
     BlockService(final VanillaShapePlugin plugin, final BlockRepository repository) throws SQLException {
         this.plugin = plugin;
@@ -57,17 +59,56 @@ final class BlockService {
 
     SpecialBlock remove(final String world, final int x, final int y, final int z) {
         final BlockPosKey pos = new BlockPosKey(x, y, z);
-        final SpecialBlock removed = map(world).remove(pos);
-        if (removed == null) return null;
-        try {
-            repository.remove(world, pos);
-        } catch (final SQLException error) {
-            map(world).put(pos, removed);
-            throw new IllegalStateException("Could not remove block", error);
+        final SpecialBlock removed;
+        synchronized (mutationLock) {
+            removed = map(world).remove(pos);
+            if (removed == null) return null;
+            try {
+                repository.remove(world, pos);
+            } catch (final SQLException error) {
+                map(world).put(pos, removed);
+                throw new IllegalStateException("Could not remove block", error);
+            }
         }
         broadcast(world, WireProtocol.remove(world, x, y, z));
         recomputeAround(world, x, y, z);
         return removed;
+    }
+
+    void applyExactBatch(final String world,
+                         final Map<BlockPosKey, SpecialBlock> requestedUpserts,
+                         final Set<BlockPosKey> requestedRemovals) {
+        if (requestedUpserts.isEmpty() && requestedRemovals.isEmpty()) return;
+        final Map<BlockPosKey, SpecialBlock> upserts = new HashMap<>();
+        for (final var entry : requestedUpserts.entrySet()) {
+            final BlockPosKey pos = entry.getKey();
+            final SpecialBlock block = entry.getValue();
+            if (!world.equals(block.world()) || block.x() != pos.x()
+                    || block.y() != pos.y() || block.z() != pos.z()) {
+                throw new IllegalArgumentException("Batch block coordinates do not match their key");
+            }
+            upserts.put(pos, block);
+        }
+        final Set<BlockPosKey> removals = new LinkedHashSet<>(requestedRemovals);
+        removals.removeAll(upserts.keySet());
+        synchronized (mutationLock) {
+            try {
+                repository.applyBatch(world, upserts, removals);
+            } catch (final SQLException error) {
+                throw new IllegalStateException("Could not store WorldEdit block batch", error);
+            }
+            final Map<BlockPosKey, SpecialBlock> worldBlocks = map(world);
+            removals.forEach(worldBlocks::remove);
+            worldBlocks.putAll(upserts);
+        }
+
+        final Runnable sync = () -> {
+            removals.forEach(pos -> broadcast(world,
+                    WireProtocol.remove(world, pos.x(), pos.y(), pos.z())));
+            upserts.values().forEach(block -> broadcast(world, WireProtocol.upsert(block)));
+        };
+        if (Bukkit.isPrimaryThread()) sync.run();
+        else Bukkit.getScheduler().runTask(plugin, sync);
     }
 
     void removeStructure(final SpecialBlock block) {
@@ -149,12 +190,14 @@ final class BlockService {
 
     private void persistAndBroadcast(final SpecialBlock block) {
         final BlockPosKey pos = key(block);
-        final SpecialBlock old = map(block.world()).put(pos, block);
-        try {
-            repository.upsert(block);
-        } catch (final SQLException error) {
-            if (old == null) map(block.world()).remove(pos); else map(block.world()).put(pos, old);
-            throw new IllegalStateException("Could not store block", error);
+        synchronized (mutationLock) {
+            final SpecialBlock old = map(block.world()).put(pos, block);
+            try {
+                repository.upsert(block);
+            } catch (final SQLException error) {
+                if (old == null) map(block.world()).remove(pos); else map(block.world()).put(pos, old);
+                throw new IllegalStateException("Could not store block", error);
+            }
         }
         broadcast(block.world(), WireProtocol.upsert(block));
     }
@@ -171,7 +214,7 @@ final class BlockService {
     }
 
     private Map<BlockPosKey, SpecialBlock> map(final String world) {
-        return worlds.computeIfAbsent(world, ignored -> new HashMap<>());
+        return worlds.computeIfAbsent(world, ignored -> new ConcurrentHashMap<>());
     }
 
     private static BlockPosKey key(final SpecialBlock block) {

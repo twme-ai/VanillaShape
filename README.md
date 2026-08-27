@@ -15,8 +15,10 @@ VanillaShape 是一套配對使用的 **PaperMC 插件 + Fabric 客戶端模組*
 - 玩家加入或切換世界時完整同步；編輯時即時傳送增量更新。
 - 特殊方塊有可堆疊的原版物品表示；物品 PDC 保存形狀、完整材質與狀態，右鍵即可放置，滑鼠中鍵可拾取目標狀態。
 - 原版除錯棒可直接選取並循環特殊方塊的適用狀態；Shift 反向循環。
+- 準星指向特殊方塊時可直接左鍵打掉；生存模式掉落保存完整形狀、材質與狀態的物品。
 - 可用指令替換特殊方塊形狀、把原版方塊轉換成特殊方塊，或把特殊方塊還原成原版實體方塊。
 - 安裝 Axiom 時會透過官方 AxiomClientAPI 加入 `VanillaShape` Editor 工具；可放置、替換與刪除特殊方塊。
+- 可選整合 WorldEdit 7.4.5 或 FastAsyncWorldEdit 2.15.4：八種 `vanillashape:*` 方塊會進入參數補全，並支援 set、replace、mask、copy/cut/paste、旋轉／鏡像、Sponge v3 schematic 與 undo/redo。
 - 直立半磚使用與原版樓梯一致的相對狀態：`straight`、`inner_left`、`inner_right`、`outer_left`、`outer_right`。Paper 會在相鄰方塊變更時重新計算狀態。
 - 直立半磚貼在側面時會靠向被點擊的支撐方塊；點擊頂面或底面時依命中位置選擇東／西／南／北半，中央位置則依玩家朝向決定。放置後會像樓梯一樣自動形成內外角。
 - 依需求，目前特殊方塊只有顯示效果，**沒有伺服器碰撞箱**；Paper 世界中的對應位置保持空氣。
@@ -39,8 +41,8 @@ flowchart LR
 
 ## 安裝
 
-1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.2.1.jar`。
-2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.2.1.jar`。
+1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.3.0.jar`。
+2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.3.0.jar`。
 3. 啟動伺服器。資料庫會建立於 `plugins/VanillaShape/blocks.db`。
 
 若同時使用 Axiom：
@@ -93,6 +95,7 @@ flowchart LR
 - 拿著物品右鍵既有特殊方塊：沿命中的面相鄰放置。
 - 準星對著特殊方塊按滑鼠中鍵：把該方塊的完整形狀、材質與狀態取到物品欄。
 - 生存模式會消耗物品；創造模式不消耗。
+- 除錯棒以外的物品或空手左鍵特殊方塊會立即移除它；生存／冒險模式掉落該方塊的精確狀態物品，創造模式不掉落。
 
 ### 除錯棒
 
@@ -122,11 +125,40 @@ VanillaShape 使用 [AxiomClientAPI](https://github.com/Moulberry/AxiomClientAPI
 | `vanillashape.use` | 從物品欄放置 | OP |
 | `vanillashape.items` | 中鍵取得特殊方塊物品 | OP |
 | `vanillashape.debugstick` | 除錯棒編輯狀態 | OP |
+| `vanillashape.break` | 直接打掉特殊方塊 | OP |
 | `vanillashape.axiom` | Axiom 的 VanillaShape 工具 | OP |
+| `vanillashape.worldedit` | 在 WorldEdit／FAWE 使用 `vanillashape:*` | OP |
 
-### WorldEdit / FastAsyncWorldEdit 研究
+### WorldEdit / FastAsyncWorldEdit
 
-VanillaShape 的世界 carrier 是空氣，不能把不存在的 `vanillashape:*` ID 直接註冊成 WorldEdit `BlockType`。可行整合方式是註冊自訂輸入解析器來提供名稱與指令補全，再用 EditSession extent 在 WorldEdit 與 SQLite 資料層之間轉換帶 NBT 的原版 proxy。針對 WorldEdit、FAWE 與提供的 ItemsAdder-WorldEdit 實例之完整拆包結論、歷史／schematic／非同步批次設計，見 [`docs/WORLDEDIT_FAWE_INTEGRATION.md`](docs/WORLDEDIT_FAWE_INTEGRATION.md)。
+只要在 Paper 端另外安裝 WorldEdit 或 FAWE，VanillaShape 就會自動啟用整合，不需要額外橋接插件。可用的方塊 ID：
+
+```text
+vanillashape:wall
+vanillashape:fence
+vanillashape:fence_gate
+vanillashape:slab
+vanillashape:stairs
+vanillashape:door
+vanillashape:trapdoor
+vanillashape:vertical_slab
+```
+
+省略狀態時使用石頭材質、north、straight 與全 false。WorldEdit 的完整狀態使用 SNBT：
+
+```text
+//set vanillashape:vertical_slab{material:"minecraft:oak_log[axis=x]",facing:"east",corner:"straight"}
+//replace vanillashape:vertical_slab vanillashape:stairs{material:"minecraft:deepslate",facing:"west",half:"top"}
+```
+
+FAWE 的 rich parser 會把材質 BlockData 的 `[]` 當成自己的語法，因此帶狀態的項目需多包一層中括號；只寫 shape 時不需要：
+
+```text
+//set vanillashape:vertical_slab[{material:"minecraft:oak_log[axis=x]",facing:"east"}]
+//replace vanillashape:vertical_slab[{material:"minecraft:oak_log[axis=x]"}] minecraft:stone
+```
+
+shape-only mask 會匹配該形狀的所有材質；指定欄位時只比較指定欄位。寫入經單一 SQLite transaction 批次提交，世界中的 backing block 仍是空氣。`//undo`／`//redo`、一般 `//copy`／`//cut`／`//paste`、`//rotate`／`//flip` 和 Sponge v3 schematic 會保存完整狀態。技術原理、ItemsAdder-WorldEdit 拆包比較與已驗證範圍見 [`docs/WORLDEDIT_FAWE_INTEGRATION.md`](docs/WORLDEDIT_FAWE_INTEGRATION.md)。
 
 ## 編譯與測試
 
@@ -136,20 +168,20 @@ VanillaShape 的世界 carrier 是空氣，不能把不存在的 `vanillashape:*
 
 產物：
 
-- Paper：`paper/build/libs/paper-0.2.1.jar`（已內含 relocated SQLite JDBC）
-- Fabric：`fabric/build/libs/fabric-0.2.1.jar`
+- Paper：`paper/build/libs/paper-0.3.0.jar`（已內含 relocated SQLite JDBC）
+- Fabric：`fabric/build/libs/fabric-0.3.0.jar`
 
-測試涵蓋雙向 wire protocol、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、直立半磚的方向與內外角狀態、幾何旋轉、neutral overlay，以及虛擬幾何 raycast。協定 v3 需要 Paper 與 Fabric 兩端一起更新至 0.2.1。
+測試涵蓋雙向 wire protocol、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、直立半磚方向與內外角、柵欄門幾何、neutral overlay、虛擬幾何 raycast，以及 WorldEdit／FAWE 的 proxy、mask、history、clipboard、旋轉、schematic 和非同步批次。協定 v4 需要 Paper 與 Fabric 兩端一起更新至 0.3.0。
 
 ## 已知限制與下一步
 
-- 目前沒有碰撞、破壞動畫或一般工具的生存模式掉落；物品放置與拾取已支援。
+- 目前沒有伺服器碰撞箱、硬度或漸進式破壞動畫；左鍵會立即移除並在非創造模式掉落精確狀態物品。
 - 同步目前採「進入世界時全量 + 編輯時增量」，尚未按玩家追蹤中的 chunk 分片。
 - 顯示幾何在每個畫面提交；大量方塊的下一階段應改成按 chunk 快取 mesh。
 - 水浸狀態已納入協定，但尚未繪製額外水體。
 - 沒有 Fabric 模組的玩家無法看到特殊方塊，這是無資源包方案的必要取捨。
 - Axiom 原生工具只認得實際世界的原版方塊；虛擬方塊請使用整合提供的 `VanillaShape` 工具。
-- WorldEdit / FAWE 整合目前完成可行性與參考實作研究，尚未在正式產物啟用；不能安全地用偽造 `BlockType` 取代 parser + proxy extent。
+- WorldEdit／FAWE 的一般選區命令已支援；只直接枚舉 Minecraft 原生 `BlockType.REGISTRY`、完全不使用 WorldEdit parser 的第三方 GUI 仍看不到虛擬 ID。
 
 ## 授權
 

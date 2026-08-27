@@ -24,6 +24,8 @@ public record SpecialBlock(
     public static final int SOUTH = 1 << 7;
     public static final int WEST = 1 << 8;
     public static final int DOOR_UPPER = 1 << 9;
+    public static final int ALL_FLAGS = WATERLOGGED | TOP | OPEN | HINGE_RIGHT | POWERED
+            | NORTH | EAST | SOUTH | WEST | DOOR_UPPER;
 
     public SpecialBlock {
         Objects.requireNonNull(world, "world");

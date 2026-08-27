@@ -11,6 +11,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -29,6 +30,7 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
     private ShapeItemFactory shapeItems;
     private PlacementService placements;
     private DebugStickService debugStick;
+    private WorldEditIntegration worldEdit;
 
     @Override public void onEnable() {
         try {
@@ -52,6 +54,14 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
         final PluginCommand command = Objects.requireNonNull(getCommand("vshape"));
         command.setExecutor(executor);
         command.setTabCompleter(executor);
+        if (Bukkit.getPluginManager().isPluginEnabled("WorldEdit")
+                || Bukkit.getPluginManager().isPluginEnabled("FastAsyncWorldEdit")) {
+            try {
+                worldEdit = WorldEditIntegration.enable(this, blocks);
+            } catch (final LinkageError | RuntimeException error) {
+                getLogger().log(Level.SEVERE, "Could not enable WorldEdit/FAWE compatibility", error);
+            }
+        }
         getLogger().info("Loaded " + blocks.inWorld("minecraft:overworld").size()
                 + " overworld special blocks; Fabric clients may now synchronize.");
         if (Bukkit.getPluginManager().isPluginEnabled("AxiomPaper")) {
@@ -60,6 +70,7 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
     }
 
     @Override public void onDisable() {
+        if (worldEdit != null) worldEdit.close();
         if (repository != null) repository.close();
     }
 
@@ -106,6 +117,11 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
                 requirePermission(player, "vanillashape.items");
                 final var target = requireNearTarget(player, request.x(), request.y(), request.z());
                 pick(player, target);
+            }
+            case WireProtocol.BREAK_BLOCK -> {
+                requirePermission(player, "vanillashape.break");
+                final var target = requireNearTarget(player, request.x(), request.y(), request.z());
+                breakBlock(player, target);
             }
             case WireProtocol.AXIOM_PLACE -> {
                 requireAxiom(player, true);
@@ -180,6 +196,36 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
             final var overflow = player.getInventory().addItem(item);
             overflow.values().forEach(value -> player.getWorld().dropItemNaturally(player.getLocation(), value));
         }
+    }
+
+    private void breakBlock(final Player player,
+                            final dev.twme.vanillashape.common.SpecialBlock target) {
+        if (player.getGameMode() == org.bukkit.GameMode.SPECTATOR) {
+            throw new IllegalArgumentException("Spectators cannot break VanillaShape blocks.");
+        }
+        final Block backing = player.getWorld().getBlockAt(target.x(), target.y(), target.z());
+        final BlockBreakEvent event = new BlockBreakEvent(backing, player);
+        event.setDropItems(false);
+        Bukkit.getPluginManager().callEvent(event);
+        if (event.isCancelled()) throw new IllegalArgumentException("That block is protected.");
+
+        final var droppedState = lowerDoorHalf(target);
+        blocks.removeStructure(target);
+        if (player.getGameMode() != org.bukkit.GameMode.CREATIVE) {
+            player.getWorld().dropItemNaturally(backing.getLocation().add(.5, .5, .5),
+                    shapeItems.create(droppedState, 1));
+        }
+    }
+
+    private dev.twme.vanillashape.common.SpecialBlock lowerDoorHalf(
+            final dev.twme.vanillashape.common.SpecialBlock block) {
+        if (block.shape() != dev.twme.vanillashape.common.ShapeType.DOOR
+                || (block.flags() & dev.twme.vanillashape.common.SpecialBlock.DOOR_UPPER) == 0) {
+            return block;
+        }
+        final var lower = blocks.get(block.world(), block.x(), block.y() - 1, block.z());
+        return lower == null ? block.at(block.world(), block.x(), block.y() - 1, block.z())
+                .withFlags(block.flags() & ~dev.twme.vanillashape.common.SpecialBlock.DOOR_UPPER) : lower;
     }
 
     private dev.twme.vanillashape.common.SpecialBlock requireNearTarget(

@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 /** Versioned Paper plugin-message payload shared with the Fabric client. */
 public final class WireProtocol {
     public static final String CHANNEL = "vanillashape:sync";
-    public static final int VERSION = 3;
+    public static final int VERSION = 4;
     public static final byte HELLO = 1;
     public static final byte RESET = 2;
     public static final byte UPSERT = 3;
@@ -22,6 +22,7 @@ public final class WireProtocol {
     public static final byte AXIOM_PLACE = 9;
     public static final byte AXIOM_REPLACE = 10;
     public static final byte AXIOM_DELETE = 11;
+    public static final byte BREAK_BLOCK = 12;
 
     private WireProtocol() {}
 
@@ -59,6 +60,9 @@ public final class WireProtocol {
     public static byte[] axiomDelete(final int x, final int y, final int z) {
         return coordinate(AXIOM_DELETE, x, y, z, false);
     }
+    public static byte[] breakBlock(final int x, final int y, final int z) {
+        return coordinate(BREAK_BLOCK, x, y, z, false);
+    }
 
     public static Decoded decode(final byte[] bytes) throws IOException {
         try (var in = new DataInputStream(new ByteArrayInputStream(bytes))) {
@@ -75,7 +79,7 @@ public final class WireProtocol {
                 }
                 case REMOVE -> new Decoded(action, readString(in), null,
                         in.readInt(), in.readInt(), in.readInt(), false, null, 0, 0, 0);
-                case DEBUG_SELECT, DEBUG_CYCLE, PICK_ITEM,
+                case DEBUG_SELECT, DEBUG_CYCLE, PICK_ITEM, BREAK_BLOCK,
                         AXIOM_REPLACE, AXIOM_DELETE -> new Decoded(
                         action, null, null, in.readInt(), in.readInt(), in.readInt(), in.readBoolean(),
                         null, 0, 0, 0);

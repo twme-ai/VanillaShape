@@ -4,7 +4,7 @@ main: dev.twme.vanillashape.paper.VanillaShapePlugin
 description: Server authority for resource-pack-free Fabric-rendered shaped blocks
 api-version: '26.2'
 authors: [TWME-TW]
-softdepend: [AxiomPaper]
+softdepend: [AxiomPaper, WorldEdit, FastAsyncWorldEdit]
 commands:
   vshape:
     description: Manage VanillaShape blocks
@@ -22,6 +22,12 @@ permissions:
   vanillashape.debugstick:
     description: Edit VanillaShape states with a debug stick
     default: op
+  vanillashape.break:
+    description: Break VanillaShape blocks directly
+    default: op
   vanillashape.axiom:
     description: Use the VanillaShape tool inside Axiom Editor
+    default: op
+  vanillashape.worldedit:
+    description: Use VanillaShape block entries through WorldEdit or FAWE
     default: op

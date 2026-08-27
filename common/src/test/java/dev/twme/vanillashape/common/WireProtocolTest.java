@@ -40,6 +40,12 @@ class WireProtocolTest {
         assertEquals(30, place.z());
         assertEquals(PlacementFace.UP, place.face());
         assertEquals(.75f, place.hitX());
+
+        final WireProtocol.Decoded broken = WireProtocol.decode(WireProtocol.breakBlock(-8, 12, 45));
+        assertEquals(WireProtocol.BREAK_BLOCK, broken.action());
+        assertEquals(-8, broken.x());
+        assertEquals(12, broken.y());
+        assertEquals(45, broken.z());
     }
 
     @Test void rejectsOutOfRangePlacementHit() {

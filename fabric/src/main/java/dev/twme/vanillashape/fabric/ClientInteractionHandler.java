@@ -21,11 +21,15 @@ public final class ClientInteractionHandler {
     }
 
     public static boolean attack(final Minecraft client) {
-        if (client.player == null || !client.player.getMainHandItem().is(Items.DEBUG_STICK)) return false;
+        if (client.player == null) return false;
         final ClientBlockStore.Hit hit = hit(client, client.player.blockInteractionRange());
         if (hit == null) return false;
-        send(WireProtocol.debugSelect(hit.block().x(), hit.block().y(), hit.block().z(),
-                client.player.isShiftKeyDown()));
+        if (client.player.getMainHandItem().is(Items.DEBUG_STICK)) {
+            send(WireProtocol.debugSelect(hit.block().x(), hit.block().y(), hit.block().z(),
+                    client.player.isShiftKeyDown()));
+        } else {
+            send(WireProtocol.breakBlock(hit.block().x(), hit.block().y(), hit.block().z()));
+        }
         return true;
     }
 

@@ -7,7 +7,9 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.List;
+import java.util.Set;
 
 final class BlockRepository implements Closeable {
     private final Connection connection;
@@ -28,7 +30,7 @@ final class BlockRepository implements Closeable {
         }
     }
 
-    List<SpecialBlock> loadAll() throws SQLException {
+    synchronized List<SpecialBlock> loadAll() throws SQLException {
         final var result = new ArrayList<SpecialBlock>();
         try (var statement = connection.createStatement();
              var rows = statement.executeQuery("SELECT * FROM special_blocks")) {
@@ -45,7 +47,7 @@ final class BlockRepository implements Closeable {
         return result;
     }
 
-    void upsert(final SpecialBlock block) throws SQLException {
+    synchronized void upsert(final SpecialBlock block) throws SQLException {
         try (var statement = connection.prepareStatement("""
                 INSERT INTO special_blocks(world,x,y,z,shape,material,facing,corner,flags)
                 VALUES(?,?,?,?,?,?,?,?,?)
@@ -62,7 +64,7 @@ final class BlockRepository implements Closeable {
         }
     }
 
-    void remove(final String world, final BlockPosKey pos) throws SQLException {
+    synchronized void remove(final String world, final BlockPosKey pos) throws SQLException {
         try (var statement = connection.prepareStatement(
                 "DELETE FROM special_blocks WHERE world=? AND x=? AND y=? AND z=?")) {
             statement.setString(1, world);
@@ -71,7 +73,47 @@ final class BlockRepository implements Closeable {
         }
     }
 
-    @Override public void close() {
+    synchronized void applyBatch(final String world,
+                                 final Map<BlockPosKey, SpecialBlock> upserts,
+                                 final Set<BlockPosKey> removals) throws SQLException {
+        final boolean autoCommit = connection.getAutoCommit();
+        connection.setAutoCommit(false);
+        try (var remove = connection.prepareStatement(
+                    "DELETE FROM special_blocks WHERE world=? AND x=? AND y=? AND z=?");
+             var upsert = connection.prepareStatement("""
+                    INSERT INTO special_blocks(world,x,y,z,shape,material,facing,corner,flags)
+                    VALUES(?,?,?,?,?,?,?,?,?)
+                    ON CONFLICT(world,x,y,z) DO UPDATE SET shape=excluded.shape,
+                        material=excluded.material,facing=excluded.facing,
+                        corner=excluded.corner,flags=excluded.flags
+                    """)) {
+            for (final BlockPosKey pos : removals) {
+                remove.setString(1, world);
+                remove.setInt(2, pos.x()); remove.setInt(3, pos.y()); remove.setInt(4, pos.z());
+                remove.addBatch();
+            }
+            remove.executeBatch();
+            for (final var entry : upserts.entrySet()) {
+                final BlockPosKey pos = entry.getKey();
+                final SpecialBlock block = entry.getValue();
+                upsert.setString(1, world);
+                upsert.setInt(2, pos.x()); upsert.setInt(3, pos.y()); upsert.setInt(4, pos.z());
+                upsert.setString(5, block.shape().name()); upsert.setString(6, block.material());
+                upsert.setString(7, block.facing().name()); upsert.setString(8, block.corner().name());
+                upsert.setInt(9, block.flags());
+                upsert.addBatch();
+            }
+            upsert.executeBatch();
+            connection.commit();
+        } catch (final SQLException error) {
+            connection.rollback();
+            throw error;
+        } finally {
+            connection.setAutoCommit(autoCommit);
+        }
+    }
+
+    @Override public synchronized void close() {
         try { connection.close(); } catch (final SQLException ignored) {}
     }
 }
