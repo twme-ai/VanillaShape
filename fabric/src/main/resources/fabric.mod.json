@@ -5,7 +5,7 @@
   "name": "VanillaShape",
   "description": "Renders Paper-authoritative shaped blocks with vanilla textures and no resource pack.",
   "authors": ["TWME-TW"],
-  "contact": { "sources": "https://github.com/TWME-TW/VanillaShape" },
+  "contact": { "sources": "https://github.com/twme-ai/VanillaShape" },
   "license": "MIT",
   "environment": "client",
   "entrypoints": {
