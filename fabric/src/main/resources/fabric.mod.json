@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "vanillashape",
+  "version": "${version}",
+  "name": "VanillaShape",
+  "description": "Renders Paper-authoritative shaped blocks with vanilla textures and no resource pack.",
+  "authors": ["TWME-TW"],
+  "contact": { "sources": "https://github.com/TWME-TW/VanillaShape" },
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": ["dev.twme.vanillashape.fabric.VanillaShapeClient"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "~26.2",
+    "java": ">=25",
+    "fabric-api": "*"
+  }
+}

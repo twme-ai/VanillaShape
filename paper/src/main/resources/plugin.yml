@@ -1,0 +1,14 @@
+name: VanillaShape
+version: '${version}'
+main: dev.twme.vanillashape.paper.VanillaShapePlugin
+description: Server authority for resource-pack-free Fabric-rendered shaped blocks
+api-version: '26.2'
+authors: [TWME-TW]
+commands:
+  vshape:
+    description: Manage VanillaShape blocks
+    usage: /vshape <place|remove|material|state|inspect|list>
+    permission: vanillashape.admin
+permissions:
+  vanillashape.admin:
+    default: op

@@ -1,0 +1,26 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version '1.17-SNAPSHOT' apply false
+    id 'com.gradleup.shadow' version '9.2.2' apply false
+}
+
+allprojects {
+    group = 'dev.twme.vanillashape'
+    version = '0.1.0'
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    plugins.withType(JavaPlugin).configureEach {
+        java {
+            toolchain.languageVersion = JavaLanguageVersion.of(25)
+            withSourcesJar()
+        }
+        tasks.withType(JavaCompile).configureEach {
+            options.release = 25
+            options.encoding = 'UTF-8'
+        }
+    }
+}

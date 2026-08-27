@@ -1,0 +1,121 @@
+package dev.twme.vanillashape.fabric;
+
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import dev.twme.vanillashape.common.SpecialBlock;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.renderer.rendertype.RenderType;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.world.phys.Vec3;
+
+final class ShapeRenderer {
+    private final ClientBlockStore store;
+    private final ModelMaterialResolver materials = new ModelMaterialResolver();
+
+    ShapeRenderer(final ClientBlockStore store) { this.store = store; }
+
+    void render(final LevelRenderContext context) {
+        final Minecraft client = Minecraft.getInstance();
+        final ClientLevel level = client.level;
+        if (level == null) return;
+        final Vec3 camera = context.levelState().cameraRenderState.pos;
+        final String world = level.dimension().identifier().toString();
+        for (final SpecialBlock block : store.blocks(world)) {
+            final double dx = block.x() + .5 - camera.x;
+            final double dy = block.y() + .5 - camera.y;
+            final double dz = block.z() + .5 - camera.z;
+            if (dx * dx + dy * dy + dz * dz > 256 * 256) continue;
+            final BlockPos pos = new BlockPos(block.x(), block.y(), block.z());
+            if (!level.isLoaded(pos)) continue;
+            final ModelMaterialResolver.Resolved material = materials.resolve(block.material(), level, pos);
+            final int light = LightCoordsUtil.getLightCoords(level, pos);
+            final RenderType renderType = material.translucent()
+                    ? RenderTypes.entityTranslucent(TextureAtlas.LOCATION_BLOCKS)
+                    : RenderTypes.entityCutout(TextureAtlas.LOCATION_BLOCKS);
+
+            final PoseStack poseStack = context.poseStack();
+            poseStack.pushPose();
+            poseStack.translate(block.x() - camera.x, block.y() - camera.y, block.z() - camera.z);
+            context.submitNodeCollector().submitCustomGeometry(poseStack, renderType,
+                    (pose, buffer) -> draw(block, material, pose, buffer, light));
+            poseStack.popPose();
+        }
+    }
+
+    void clearMaterials() { materials.clear(); }
+
+    private static void draw(final SpecialBlock block, final ModelMaterialResolver.Resolved material,
+                             final PoseStack.Pose pose, final VertexConsumer out, final int light) {
+        for (final ShapeGeometry.Box box : ShapeGeometry.boxes(block)) {
+            face(out, pose, material.face(Direction.DOWN), Direction.DOWN, light,
+                    box.minX(), box.minY(), box.maxZ(), box.maxX(), box.minY(), box.minZ(), box);
+            face(out, pose, material.face(Direction.UP), Direction.UP, light,
+                    box.minX(), box.maxY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ(), box);
+            face(out, pose, material.face(Direction.NORTH), Direction.NORTH, light,
+                    box.maxX(), box.minY(), box.minZ(), box.minX(), box.maxY(), box.minZ(), box);
+            face(out, pose, material.face(Direction.SOUTH), Direction.SOUTH, light,
+                    box.minX(), box.minY(), box.maxZ(), box.maxX(), box.maxY(), box.maxZ(), box);
+            face(out, pose, material.face(Direction.WEST), Direction.WEST, light,
+                    box.minX(), box.minY(), box.minZ(), box.minX(), box.maxY(), box.maxZ(), box);
+            face(out, pose, material.face(Direction.EAST), Direction.EAST, light,
+                    box.maxX(), box.minY(), box.maxZ(), box.maxX(), box.maxY(), box.minZ(), box);
+        }
+    }
+
+    /** The first two points describe the lower/first edge; the opposite edge is derived per face. */
+    private static void face(final VertexConsumer out, final PoseStack.Pose pose,
+            final java.util.List<ModelMaterialResolver.Face> layers, final Direction direction, final int light,
+            final float ax, final float ay, final float az,
+            final float bx, final float by, final float bz, final ShapeGeometry.Box box) {
+        for (final ModelMaterialResolver.Face material : layers) {
+        final float[][] vertices = switch (direction) {
+            case DOWN -> new float[][] {{box.minX(),box.minY(),box.maxZ()},{box.minX(),box.minY(),box.minZ()},
+                    {box.maxX(),box.minY(),box.minZ()},{box.maxX(),box.minY(),box.maxZ()}};
+            case UP -> new float[][] {{box.minX(),box.maxY(),box.minZ()},{box.minX(),box.maxY(),box.maxZ()},
+                    {box.maxX(),box.maxY(),box.maxZ()},{box.maxX(),box.maxY(),box.minZ()}};
+            case NORTH -> new float[][] {{box.maxX(),box.minY(),box.minZ()},{box.maxX(),box.maxY(),box.minZ()},
+                    {box.minX(),box.maxY(),box.minZ()},{box.minX(),box.minY(),box.minZ()}};
+            case SOUTH -> new float[][] {{box.minX(),box.minY(),box.maxZ()},{box.minX(),box.maxY(),box.maxZ()},
+                    {box.maxX(),box.maxY(),box.maxZ()},{box.maxX(),box.minY(),box.maxZ()}};
+            case WEST -> new float[][] {{box.minX(),box.minY(),box.minZ()},{box.minX(),box.maxY(),box.minZ()},
+                    {box.minX(),box.maxY(),box.maxZ()},{box.minX(),box.minY(),box.maxZ()}};
+            case EAST -> new float[][] {{box.maxX(),box.minY(),box.maxZ()},{box.maxX(),box.maxY(),box.maxZ()},
+                    {box.maxX(),box.maxY(),box.minZ()},{box.maxX(),box.minY(),box.minZ()}};
+        };
+        final float shade = switch (direction) {
+            case DOWN -> .5f; case NORTH, SOUTH -> .8f; case WEST, EAST -> .6f; case UP -> 1f;
+        };
+        final int color = shade(material.color(), shade);
+        for (final float[] vertex : vertices) {
+            final float uCoord = switch (direction) {
+                case UP, DOWN, NORTH, SOUTH -> vertex[0];
+                case EAST, WEST -> vertex[2];
+            };
+            final float vCoord = switch (direction) {
+                case UP, DOWN -> vertex[2];
+                default -> 1 - vertex[1];
+            };
+            out.addVertex(pose, vertex[0], vertex[1], vertex[2])
+                    .setColor(color)
+                    .setUv(material.sprite().getU(uCoord * 16), material.sprite().getV(vCoord * 16))
+                    .setOverlay(0)
+                    .setLight(light)
+                    .setNormal(pose, direction.getStepX(), direction.getStepY(), direction.getStepZ());
+        }
+        }
+    }
+
+    private static int shade(final int argb, final float shade) {
+        final int a = argb >>> 24;
+        final int r = Math.round(((argb >>> 16) & 255) * shade);
+        final int g = Math.round(((argb >>> 8) & 255) * shade);
+        final int b = Math.round((argb & 255) * shade);
+        return a << 24 | r << 16 | g << 8 | b;
+    }
+}
