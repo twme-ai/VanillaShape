@@ -293,8 +293,10 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
     private static BlockData heldMaterial(final Player player) {
         final ItemStack item = player.getInventory().getItemInMainHand();
         final Material type = item.getType();
-        if (!type.isBlock() || type.isAir()) return Material.STONE.createBlockData();
-        if (item.getItemMeta() instanceof BlockDataMeta meta) return meta.getBlockData(type);
+        if (!type.isBlock() || type.isAir()) {
+            throw new IllegalArgumentException("Hold a non-air block item or specify a material.");
+        }
+        if (item.getItemMeta() instanceof BlockDataMeta meta && meta.hasBlockData()) return meta.getBlockData(type);
         return type.createBlockData();
     }
 

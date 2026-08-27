@@ -15,7 +15,8 @@ class WorldEditProxyCodecTest {
     @Test void parsesFriendlyNamedStateFieldsAndShapeOnlyMasks() {
         final WorldEditBlockSpec exact = WorldEditBlockSpec.parse(
                 "vanillashape:stairs{material:\"minecraft:oak_log[axis=x]\",facing:\"east\","
-                        + "half:\"top\",corner:\"outer_left\",waterlogged:1b}", value -> value);
+                        + "half:\"top\",corner:\"outer_left\",waterlogged:1b}", value -> value,
+                "minecraft:air");
         assertEquals(ShapeType.STAIRS, exact.template().shape());
         assertEquals(Direction.EAST, exact.template().facing());
         assertEquals(CornerShape.OUTER_LEFT, exact.template().corner());
@@ -25,14 +26,14 @@ class WorldEditProxyCodecTest {
         assertFalse(exact.matches(exact.template().withFacing(Direction.NORTH)));
 
         final WorldEditBlockSpec shapeOnly = WorldEditBlockSpec.parse(
-                "vanillashape:stairs", value -> value);
+                "vanillashape:stairs", value -> value, "minecraft:air");
         assertTrue(shapeOnly.matches(exact.template()));
     }
 
     @Test void acceptsFaweBracketWrappedState() {
         final WorldEditBlockSpec spec = WorldEditBlockSpec.parse(
                 "vanillashape:stairs[{material:\"minecraft:oak_log[axis=x]\","
-                        + "facing:\"east\",half:\"top\"}]", value -> value);
+                        + "facing:\"east\",half:\"top\"}]", value -> value, "minecraft:air");
 
         assertEquals(ShapeType.STAIRS, spec.template().shape());
         assertEquals("minecraft:oak_log[axis=x]", spec.template().material());
@@ -50,13 +51,27 @@ class WorldEditProxyCodecTest {
     @Test void parsesGenericModelAndKeepsShapeOnlyMaskGeneric() {
         final WorldEditBlockSpec exact = WorldEditBlockSpec.parse(
                 "vanillashape:model{model:\"minecraft:oak_button[face=wall,facing=east,powered=false]\","
-                        + "material:\"minecraft:glass\"}", value -> value);
+                        + "material:\"minecraft:glass\"}", value -> value, "minecraft:air");
         assertEquals(ShapeType.MODEL, exact.template().shape());
         assertEquals("minecraft:oak_button[face=wall,facing=east,powered=false]", exact.template().model());
         assertTrue(exact.matches(exact.template()));
         assertFalse(exact.matches(exact.template().withModel("minecraft:vine[north=true]")));
-        final WorldEditBlockSpec shapeOnly = WorldEditBlockSpec.parse("vanillashape:model", value -> value);
+        final WorldEditBlockSpec shapeOnly = WorldEditBlockSpec.parse("vanillashape:model", value -> value,
+                "minecraft:air");
         assertTrue(shapeOnly.matches(exact.template()));
 
+    }
+
+    @Test void usesHeldMaterialOnlyWhenStateDoesNotExplicitlyNameOne() {
+        final WorldEditBlockSpec held = WorldEditBlockSpec.parse("vanillashape:wall", value -> value,
+                "minecraft:oak_log[axis=x]");
+        assertEquals("minecraft:oak_log[axis=x]", held.template().material());
+        assertFalse(held.materialSpecified());
+
+        final WorldEditBlockSpec explicit = WorldEditBlockSpec.parse(
+                "vanillashape:wall{material:\"minecraft:warped_planks\"}", value -> value,
+                "minecraft:oak_log[axis=x]");
+        assertEquals("minecraft:warped_planks", explicit.template().material());
+        assertTrue(explicit.materialSpecified());
     }
 }

@@ -24,7 +24,8 @@ record WorldEditBlockSpec(SpecialBlock template, boolean materialSpecified, bool
         stateProperties = Set.copyOf(stateProperties);
     }
 
-    static WorldEditBlockSpec parse(final String original, final UnaryOperator<String> materialNormalizer) {
+    static WorldEditBlockSpec parse(final String original, final UnaryOperator<String> materialNormalizer,
+                                    final String implicitMaterial) {
         String input = original.trim();
         if (input.startsWith("=")) input = input.substring(1);
         final int wrappedState = input.indexOf("[{");
@@ -45,14 +46,14 @@ record WorldEditBlockSpec(SpecialBlock template, boolean materialSpecified, bool
             throw new IllegalArgumentException("Unexpected text after " + id);
         }
 
-        String material = "minecraft:stone";
+        String material = materialNormalizer.apply(implicitMaterial);
         int flags = 0;
         boolean materialSpecified = false;
         boolean modelSpecified = false;
         boolean flagsSpecified = false;
         final Set<String> properties = new LinkedHashSet<>();
         SpecialBlock template = new SpecialBlock("minecraft:overworld", 0, 0, 0,
-                shape, material, shape == ShapeType.MODEL ? "minecraft:stone" : "",
+                shape, material, "",
                 Direction.NORTH, CornerShape.STRAIGHT, flags);
 
         if (nbtStart >= 0) {

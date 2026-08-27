@@ -45,7 +45,7 @@ final class ShapeRenderer {
             poseStack.pushPose();
             poseStack.translate(block.x() - camera.x, block.y() - camera.y, block.z() - camera.z);
             context.submitNodeCollector().submitCustomGeometry(poseStack, renderType,
-                    (pose, buffer) -> draw(block, material, pose, buffer, light, world, level, pos));
+                    (pose, buffer) -> draw(block, material, pose, buffer, light, level, pos));
             poseStack.popPose();
         }
     }
@@ -53,16 +53,14 @@ final class ShapeRenderer {
     void clearMaterials() { materials.clear(); models.clear(); }
 
     private void draw(final SpecialBlock block, final ModelMaterialResolver.Resolved material,
-                      final PoseStack.Pose pose, final VertexConsumer out, final int light, final String world,
+                      final PoseStack.Pose pose, final VertexConsumer out, final int light,
                       final ClientLevel level, final BlockPos pos) {
         if (block.shape() == dev.twme.vanillashape.common.ShapeType.MODEL) {
             drawModel(block, material, pose, out, light, level, pos);
             return;
         }
-        for (final ShapeGeometry.Surface surface : ShapeGeometry.surfaces(block, (dx, dy, dz) ->
-                store.get(world, new BlockPos(block.x() + dx, block.y() + dy, block.z() + dz)))) {
-            if (boundary(surface) && (level.getBlockState(pos.relative(surface.direction())).isSolidRender()
-                    || virtualModelOccludes(block, surface.direction(), level))) continue;
+        for (final ShapeGeometry.Surface surface : ShapeGeometry.surfaces(block)) {
+            if (boundary(surface) && level.getBlockState(pos.relative(surface.direction())).isSolidRender()) continue;
             face(out, pose, material.face(surface.direction()), surface.direction(), light, surface);
         }
     }
@@ -72,8 +70,7 @@ final class ShapeRenderer {
                            final ClientLevel level, final BlockPos pos) {
         for (final TemplateModelResolver.Quad quad : models.resolve(block.model())) {
             if (quad.cullDirection() != null
-                    && (level.getBlockState(pos.relative(quad.cullDirection())).isSolidRender()
-                    || virtualOccludes(block, quad.cullDirection(), level))) continue;
+                    && level.getBlockState(pos.relative(quad.cullDirection())).isSolidRender()) continue;
             final float shade = quad.shade() ? shade(quad.direction()) : 1;
             for (final ModelMaterialResolver.Face layer : material.face(quad.direction())) {
                 final int color = shade(layer.color(), shade);
@@ -88,27 +85,6 @@ final class ShapeRenderer {
                 }
             }
         }
-    }
-
-    private boolean virtualOccludes(final SpecialBlock block, final Direction direction,
-                                    final ClientLevel level) {
-        final String world = level.dimension().identifier().toString();
-        final SpecialBlock neighbor = store.get(world, new BlockPos(block.x(), block.y(), block.z())
-                .relative(direction));
-        if (neighbor == null) return false;
-        if (neighbor.shape() == dev.twme.vanillashape.common.ShapeType.MODEL) {
-            return models.occludesFullCube(neighbor.model());
-        }
-        return ShapeGeometry.coversFace(neighbor, direction.getOpposite());
-    }
-
-    private boolean virtualModelOccludes(final SpecialBlock block, final Direction direction,
-                                         final ClientLevel level) {
-        final String world = level.dimension().identifier().toString();
-        final SpecialBlock neighbor = store.get(world, new BlockPos(block.x(), block.y(), block.z())
-                .relative(direction));
-        return neighbor != null && neighbor.shape() == dev.twme.vanillashape.common.ShapeType.MODEL
-                && models.occludesFullCube(neighbor.model());
     }
 
     private static boolean boundary(final ShapeGeometry.Surface surface) {

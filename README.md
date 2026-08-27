@@ -46,8 +46,8 @@ flowchart LR
 
 ## 安裝
 
-1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.4.0.jar`。
-2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.4.0.jar`。
+1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.4.1.jar`。
+2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.4.1.jar`。
 3. 啟動伺服器。資料庫會建立於 `plugins/VanillaShape/blocks.db`。
 
 若同時使用 Axiom：
@@ -79,7 +79,7 @@ flowchart LR
 /vshape list
 ```
 
-若省略 `blockdata`，會使用主手方塊物品的完整 BlockData；主手不是方塊時使用石頭。
+若省略 `blockdata`，會使用主手非空氣方塊物品的完整 BlockData；空手或手持非方塊時，指令會要求明確指定材質，絕不回退成石頭。
 
 範例：
 
@@ -170,7 +170,7 @@ vanillashape:model
 //set vanillashape:model{model:"minecraft:vine[north=true]",material:"minecraft:warped_planks"}
 ```
 
-省略狀態時使用石頭材質、north、straight 與全 false。WorldEdit 的完整狀態使用 SNBT：
+在 WorldEdit／FAWE 中省略 `material` 時，會使用主手非空氣方塊物品的完整 BlockData；主控台或空手必須寫出 `material:"..."`。其餘未指定狀態仍是 `north`、`straight` 與全 false。`model` 另外必須明確給出 `model:"..."`。WorldEdit 的完整狀態使用 SNBT：
 
 ```text
 //set vanillashape:vertical_slab{material:"minecraft:oak_log[axis=x]",facing:"east",corner:"straight"}
@@ -194,10 +194,10 @@ shape-only mask 會匹配該形狀的所有材質；指定欄位時只比較指�
 
 產物：
 
-- Paper：`paper/build/libs/paper-0.4.0.jar`（已內含 relocated SQLite JDBC）
-- Fabric：`fabric/build/libs/fabric-0.4.0.jar`
+- Paper：`paper/build/libs/paper-0.4.1.jar`（已內含 relocated SQLite JDBC）
+- Fabric：`fabric/build/libs/fabric-0.4.1.jar`
 
-測試涵蓋雙向 wire protocol、任意模型資料、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、原版牆狀態、外表面聯集、直立半磚方向與內外角、柵欄門幾何、neutral overlay、虛擬幾何 raycast，以及 WorldEdit／FAWE 的 proxy、mask、history、clipboard、旋轉、schematic 和非同步批次。協定 v5 需要 Paper 與 Fabric 兩端一起更新至 0.4.0。
+測試涵蓋雙向 wire protocol、任意模型資料、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、原版牆狀態、外表面聯集、直立半磚方向與內外角、柵欄門幾何、neutral overlay、虛擬幾何 raycast，以及 WorldEdit／FAWE 的 proxy、mask、history、clipboard、旋轉、schematic 和非同步批次。協定 v5 沒有變動；Paper 與 Fabric 仍應一起更新至 0.4.1。
 
 ## 已知限制與下一步
 

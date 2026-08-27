@@ -16,15 +16,19 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockDataMeta;
 
 import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
 /** Authoritative right-click behavior and per-player material replacement mode. */
 final class InteractionService {
+    private static final long SAME_TARGET_DEBOUNCE_NANOS = 150_000_000L;
     private final VanillaShapePlugin plugin;
     private final BlockService blocks;
     private final ShapeItemFactory items;
     private final Set<UUID> replacement = new HashSet<>();
+    private final Map<UUID, RecentInteraction> recentInteractions = new HashMap<>();
 
     InteractionService(final VanillaShapePlugin plugin, final BlockService blocks,
                        final ShapeItemFactory items) {
@@ -42,6 +46,7 @@ final class InteractionService {
     }
 
     void interact(final Player player, final SpecialBlock target) {
+        if (isDuplicateInteraction(player, target)) return;
         if (replacementMode(player)) {
             final String material = heldMaterial(player).getAsString();
             updateStructure(target, block -> block.withMaterial(material));
@@ -57,6 +62,22 @@ final class InteractionService {
             case MODEL -> interactModel(player, target);
             default -> throw new IllegalArgumentException("That VanillaShape block has no right-click action.");
         }
+    }
+
+    void forget(final Player player) {
+        replacement.remove(player.getUniqueId());
+        recentInteractions.remove(player.getUniqueId());
+    }
+
+    /** Fabric's intercepted use action can arrive twice for one physical click on some clients. */
+    private boolean isDuplicateInteraction(final Player player, final SpecialBlock target) {
+        final long now = System.nanoTime();
+        final UUID playerId = player.getUniqueId();
+        final RecentInteraction previous = recentInteractions.put(playerId,
+                new RecentInteraction(target.world(), target.x(), target.y(), target.z(), now));
+        return previous != null && previous.world().equals(target.world())
+                && previous.x() == target.x() && previous.y() == target.y() && previous.z() == target.z()
+                && now - previous.atNanos() < SAME_TARGET_DEBOUNCE_NANOS;
     }
 
     private void interactModel(final Player player, final SpecialBlock target) {
@@ -113,4 +134,6 @@ final class InteractionService {
         }
         return type.createBlockData();
     }
+
+    private record RecentInteraction(String world, int x, int y, int z, long atNanos) {}
 }

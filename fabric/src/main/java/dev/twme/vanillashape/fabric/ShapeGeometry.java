@@ -11,8 +11,6 @@ final class ShapeGeometry {
     record Box(float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {}
     record Surface(net.minecraft.core.Direction direction,
                    float minX, float minY, float minZ, float maxX, float maxY, float maxZ) {}
-    @FunctionalInterface interface NeighborLookup { SpecialBlock get(int dx, int dy, int dz); }
-
     private ShapeGeometry() {}
 
     static List<Box> boxes(final SpecialBlock block) {
@@ -32,13 +30,12 @@ final class ShapeGeometry {
         return rotate(canonical, block.facing());
     }
 
-    /** Builds only the boundary of the union, removing internal/coplanar faces between component boxes. */
-    static List<Surface> surfaces(final SpecialBlock block, final NeighborLookup neighbors) {
+    /** Builds only this shape's boundary, removing internal/coplanar faces between its component boxes. */
+    static List<Surface> surfaces(final SpecialBlock block) {
         final List<Box> boxes = boxes(block);
         final java.util.TreeSet<Float> xs = coordinates(boxes, true, false, false);
         final java.util.TreeSet<Float> ys = coordinates(boxes, false, true, false);
         final java.util.TreeSet<Float> zs = coordinates(boxes, false, false, true);
-        addProjectedCoordinates(xs, ys, zs, neighbors);
         final Float[] x = xs.toArray(Float[]::new), y = ys.toArray(Float[]::new), z = zs.toArray(Float[]::new);
         final List<Surface> result = new ArrayList<>();
         for (int ix = 0; ix + 1 < x.length; ix++) for (int iy = 0; iy + 1 < y.length; iy++) {
@@ -47,57 +44,25 @@ final class ShapeGeometry {
                 final float cy = midpoint(y[iy], y[iy + 1]);
                 final float cz = midpoint(z[iz], z[iz + 1]);
                 if (!occupied(boxes, cx, cy, cz)) continue;
-                addIfExposed(result, boxes, neighbors, net.minecraft.core.Direction.WEST,
+                addIfExposed(result, boxes, net.minecraft.core.Direction.WEST,
                         x[ix], y[iy], z[iz], x[ix], y[iy + 1], z[iz + 1], cx, cy, cz);
-                addIfExposed(result, boxes, neighbors, net.minecraft.core.Direction.EAST,
+                addIfExposed(result, boxes, net.minecraft.core.Direction.EAST,
                         x[ix + 1], y[iy], z[iz], x[ix + 1], y[iy + 1], z[iz + 1], cx, cy, cz);
-                addIfExposed(result, boxes, neighbors, net.minecraft.core.Direction.DOWN,
+                addIfExposed(result, boxes, net.minecraft.core.Direction.DOWN,
                         x[ix], y[iy], z[iz], x[ix + 1], y[iy], z[iz + 1], cx, cy, cz);
-                addIfExposed(result, boxes, neighbors, net.minecraft.core.Direction.UP,
+                addIfExposed(result, boxes, net.minecraft.core.Direction.UP,
                         x[ix], y[iy + 1], z[iz], x[ix + 1], y[iy + 1], z[iz + 1], cx, cy, cz);
-                addIfExposed(result, boxes, neighbors, net.minecraft.core.Direction.NORTH,
+                addIfExposed(result, boxes, net.minecraft.core.Direction.NORTH,
                         x[ix], y[iy], z[iz], x[ix + 1], y[iy + 1], z[iz], cx, cy, cz);
-                addIfExposed(result, boxes, neighbors, net.minecraft.core.Direction.SOUTH,
+                addIfExposed(result, boxes, net.minecraft.core.Direction.SOUTH,
                         x[ix], y[iy], z[iz + 1], x[ix + 1], y[iy + 1], z[iz + 1], cx, cy, cz);
             }
         }
         return result;
     }
 
-    static boolean coversFace(final SpecialBlock block, final net.minecraft.core.Direction face) {
-        if (block.shape() == dev.twme.vanillashape.common.ShapeType.MODEL) return false;
-        final List<Box> touching = boxes(block).stream().filter(box -> switch (face) {
-            case WEST -> box.minX <= 0; case EAST -> box.maxX >= 1;
-            case DOWN -> box.minY <= 0; case UP -> box.maxY >= 1;
-            case NORTH -> box.minZ <= 0; case SOUTH -> box.maxZ >= 1;
-        }).toList();
-        if (touching.isEmpty()) return false;
-        final java.util.TreeSet<Float> first = new java.util.TreeSet<>(java.util.Set.of(0f, 1f));
-        final java.util.TreeSet<Float> second = new java.util.TreeSet<>(java.util.Set.of(0f, 1f));
-        for (final Box box : touching) switch (face.getAxis()) {
-            case X -> { first.add(box.minY); first.add(box.maxY); second.add(box.minZ); second.add(box.maxZ); }
-            case Y -> { first.add(box.minX); first.add(box.maxX); second.add(box.minZ); second.add(box.maxZ); }
-            case Z -> { first.add(box.minX); first.add(box.maxX); second.add(box.minY); second.add(box.maxY); }
-        };
-        final Float[] a = first.toArray(Float[]::new), b = second.toArray(Float[]::new);
-        for (int ia = 0; ia + 1 < a.length; ia++) for (int ib = 0; ib + 1 < b.length; ib++) {
-            final float ca = midpoint(a[ia], a[ia + 1]), cb = midpoint(b[ib], b[ib + 1]);
-            boolean covered = false;
-            for (final Box box : touching) {
-                covered = switch (face.getAxis()) {
-                    case X -> ca > box.minY && ca < box.maxY && cb > box.minZ && cb < box.maxZ;
-                    case Y -> ca > box.minX && ca < box.maxX && cb > box.minZ && cb < box.maxZ;
-                    case Z -> ca > box.minX && ca < box.maxX && cb > box.minY && cb < box.maxY;
-                };
-                if (covered) break;
-            }
-            if (!covered) return false;
-        }
-        return true;
-    }
-
     private static void addIfExposed(final List<Surface> result, final List<Box> boxes,
-                                     final NeighborLookup neighbors, final net.minecraft.core.Direction direction,
+                                     final net.minecraft.core.Direction direction,
                                      final float minX, final float minY, final float minZ,
                                      final float maxX, final float maxY, final float maxZ,
                                      final float cx, final float cy, final float cz) {
@@ -109,37 +74,7 @@ final class ShapeGeometry {
         final float pz = direction == net.minecraft.core.Direction.NORTH ? minZ - epsilon
                 : direction == net.minecraft.core.Direction.SOUTH ? maxZ + epsilon : cz;
         if (occupied(boxes, px, py, pz)) return;
-        if (outsideOccupied(neighbors, px, py, pz)) return;
         result.add(new Surface(direction, minX, minY, minZ, maxX, maxY, maxZ));
-    }
-
-    private static boolean outsideOccupied(final NeighborLookup neighbors,
-                                           final float x, final float y, final float z) {
-        int dx = 0, dy = 0, dz = 0;
-        float lx = x, ly = y, lz = z;
-        if (x < 0) { dx = -1; lx += 1; } else if (x > 1) { dx = 1; lx -= 1; }
-        if (y < 0) { dy = -1; ly += 1; } else if (y > 1) { dy = 1; ly -= 1; }
-        if (z < 0) { dz = -1; lz += 1; } else if (z > 1) { dz = 1; lz -= 1; }
-        if (dx == 0 && dy == 0 && dz == 0) return false;
-        final SpecialBlock neighbor = neighbors.get(dx, dy, dz);
-        return neighbor != null && neighbor.shape() != dev.twme.vanillashape.common.ShapeType.MODEL
-                && occupied(boxes(neighbor), lx, ly, lz);
-    }
-
-    private static void addProjectedCoordinates(final java.util.Set<Float> xs,
-                                                final java.util.Set<Float> ys,
-                                                final java.util.Set<Float> zs,
-                                                final NeighborLookup neighbors) {
-        for (int dx = -1; dx <= 1; dx++) for (int dy = -1; dy <= 1; dy++) for (int dz = -1; dz <= 1; dz++) {
-            if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) != 1) continue;
-            final SpecialBlock neighbor = neighbors.get(dx, dy, dz);
-            if (neighbor == null || neighbor.shape() == dev.twme.vanillashape.common.ShapeType.MODEL) continue;
-            for (final Box box : boxes(neighbor)) {
-                if (dx != 0) { ys.add(box.minY); ys.add(box.maxY); zs.add(box.minZ); zs.add(box.maxZ); }
-                if (dy != 0) { xs.add(box.minX); xs.add(box.maxX); zs.add(box.minZ); zs.add(box.maxZ); }
-                if (dz != 0) { xs.add(box.minX); xs.add(box.maxX); ys.add(box.minY); ys.add(box.maxY); }
-            }
-        }
     }
 
     private static java.util.TreeSet<Float> coordinates(final List<Box> boxes,

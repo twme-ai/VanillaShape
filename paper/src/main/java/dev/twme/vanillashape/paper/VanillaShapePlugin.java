@@ -16,6 +16,7 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -192,6 +193,10 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
 
     @EventHandler public void onWorldChange(final PlayerChangedWorldEvent event) {
         blocks.sync(event.getPlayer());
+    }
+
+    @EventHandler public void onQuit(final PlayerQuitEvent event) {
+        interactions.forget(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

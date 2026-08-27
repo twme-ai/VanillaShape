@@ -35,7 +35,9 @@ class VanillaShapeMaskParser extends InputParser<Mask> {
         VanillaShapeBlockParser.requirePermission(context);
         final WorldEditBlockSpec spec;
         try {
-            spec = WorldEditBlockSpec.parse(input, materialNormalizer);
+            // Masks only compare explicitly supplied fields, so the fallback is never persisted
+            // or matched. It merely satisfies the template's structural requirement.
+            spec = WorldEditBlockSpec.parse(input, materialNormalizer, "minecraft:air");
         } catch (final IllegalArgumentException error) {
             throw new InputParseException(TextComponent.of(error.getMessage()), error);
         }

@@ -1,6 +1,6 @@
 # WorldEdit / FastAsyncWorldEdit 整合
 
-實作版本：VanillaShape 0.4.0（2026-08-27）。目前以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
+實作版本：VanillaShape 0.4.1（2026-08-27）。目前以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
 
 ## 使用方式
 
@@ -25,7 +25,7 @@ vanillashape:model
 //set vanillashape:model{model:"minecraft:vine[north=true]",material:"minecraft:warped_planks"}
 ```
 
-只寫 ID 會使用石頭材質與該形狀的預設狀態。標準 WorldEdit 可用 SNBT 指定材質與狀態：
+只寫 ID 時，會使用主手非空氣方塊物品的完整 BlockData 與該形狀的預設狀態。因此可先拿著想要的材質，再直接輸入 `//set vanillashape:wall`；SNBT 的 `material` 會覆寫主手材質。主控台、指令方塊與空手玩家必須明寫 `material:"minecraft:..."`，不會以石頭替代。`vanillashape:model` 一律要求 `model:"..."`。標準 WorldEdit 可用 SNBT 指定材質與狀態：
 
 ```text
 //set vanillashape:vertical_slab{material:"minecraft:oak_log[axis=x]",facing:"east",corner:"inner_left",waterlogged:1b}
@@ -63,7 +63,7 @@ Backing world 始終保持空氣。若操作把一般方塊寫到同一格，該
 1. `VanillaShapeBlockParser` 將 `vanillashape:*` 字串轉成原版形狀 proxy 加 VanillaShape NBT，並提供 suggestions。
 2. `VanillaShapeMaskParser` 直接查詢 `BlockService`，使 shape-only 與精確狀態 mask 不受 backing air 影響；FAWE 另以 `AliasedParser` 接上 rich-mask 路由。
 3. `VanillaShapeExtent` 在 `BEFORE_CHANGE`／`BEFORE_HISTORY` 暴露、攔截 proxy；寫入普通方塊時刪除虛擬記錄，寫入 proxy 時把 backing world 改回 air。
-4. `VanillaShapeClipboard` 保留 copy/cut 與 schematic 的 proxy NBT。FAWE 會隱藏非容器 carrier 的 tile NBT，因此載入後會從其 tile map 復原 marker。
+4. `VanillaShapeClipboard` 保留 copy/cut 與 schematic 的 proxy NBT。FAWE 會隱藏非容器 carrier 的 tile NBT，因此載入後會從其 tile map 復原 marker；copy 完成後即使 FAWE 重用同一個 clipboard holder，也會重新包裝 snapshot，讓後續 paste 保留 VanillaShape 狀態。
 
 Proxy NBT 的核心欄位：
 

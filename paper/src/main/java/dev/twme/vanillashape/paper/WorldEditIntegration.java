@@ -88,9 +88,8 @@ final class WorldEditIntegration implements Listener, AutoCloseable {
         if (!player.hasPermission("vanillashape.worldedit")) return;
         final var wePlayer = BukkitAdapter.adapt(player);
         final LocalSession session = worldEdit.getSessionManager().get(wePlayer);
-        final ClipboardHolder previous = clipboard(session);
         if (schematicLoad) {
-            patchClipboardWhenReady(session, previous, List.of(), 40);
+            patchClipboardWhenReady(session, List.of(), 40);
             return;
         }
         final com.sk89q.worldedit.world.World world = BukkitAdapter.adapt(player.getWorld());
@@ -129,16 +128,18 @@ final class WorldEditIntegration implements Listener, AutoCloseable {
         }
         if (snapshot.isEmpty()) return;
 
-        patchClipboardWhenReady(session, previous, snapshot, 40);
+        patchClipboardWhenReady(session, snapshot, 40);
     }
 
-    private void patchClipboardWhenReady(final LocalSession session, final ClipboardHolder previous,
+    private void patchClipboardWhenReady(final LocalSession session,
                                          final List<dev.twme.vanillashape.common.SpecialBlock> snapshot,
                                          final int attemptsLeft) {
         Bukkit.getScheduler().runTask(plugin, () -> {
             final ClipboardHolder current = clipboard(session);
-            if (current == null || current == previous) {
-                if (attemptsLeft > 1) patchClipboardWhenReady(session, previous, snapshot, attemptsLeft - 1);
+            // FAWE can mutate its existing ClipboardHolder rather than replacing it. Waiting for
+            // object identity to change silently skips proxy wrapping, so only wait for no holder.
+            if (current == null) {
+                if (attemptsLeft > 1) patchClipboardWhenReady(session, snapshot, attemptsLeft - 1);
                 return;
             }
             final Clipboard original = current.getClipboard();
