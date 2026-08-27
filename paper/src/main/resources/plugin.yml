@@ -4,11 +4,24 @@ main: dev.twme.vanillashape.paper.VanillaShapePlugin
 description: Server authority for resource-pack-free Fabric-rendered shaped blocks
 api-version: '26.2'
 authors: [TWME-TW]
+softdepend: [AxiomPaper]
 commands:
   vshape:
     description: Manage VanillaShape blocks
-    usage: /vshape <place|remove|material|state|inspect|list>
+    usage: /vshape <place|remove|material|state|give|palette|replace|convert|restore|inspect|list>
     permission: vanillashape.admin
 permissions:
   vanillashape.admin:
+    default: op
+  vanillashape.use:
+    description: Place VanillaShape inventory items
+    default: op
+  vanillashape.items:
+    description: Pick and obtain VanillaShape inventory items
+    default: op
+  vanillashape.debugstick:
+    description: Edit VanillaShape states with a debug stick
+    default: op
+  vanillashape.axiom:
+    description: Use the VanillaShape tool inside Axiom Editor
     default: op

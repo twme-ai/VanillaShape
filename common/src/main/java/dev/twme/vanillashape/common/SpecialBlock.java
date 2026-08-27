@@ -48,4 +48,13 @@ public record SpecialBlock(
     public SpecialBlock withMaterial(final String value) {
         return new SpecialBlock(world, x, y, z, shape, value, facing, corner, flags);
     }
+
+    public SpecialBlock withShape(final ShapeType value) {
+        return new SpecialBlock(world, x, y, z, value, material, facing, corner, flags);
+    }
+
+    public SpecialBlock at(final String valueWorld, final int valueX, final int valueY, final int valueZ) {
+        return new SpecialBlock(valueWorld, valueX, valueY, valueZ,
+                shape, material, facing, corner, flags);
+    }
 }

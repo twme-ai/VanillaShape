@@ -103,7 +103,8 @@ final class ShapeRenderer {
             };
             out.addVertex(pose, vertex[0], vertex[1], vertex[2])
                     .setColor(color)
-                    .setUv(material.sprite().getU(uCoord * 16), material.sprite().getV(vCoord * 16))
+                    .setUv(atlasCoordinate(material.sprite().getU0(), material.sprite().getU1(), uCoord),
+                            atlasCoordinate(material.sprite().getV0(), material.sprite().getV1(), vCoord))
                     .setOverlay(0)
                     .setLight(light)
                     .setNormal(pose, direction.getStepX(), direction.getStepY(), direction.getStepZ());
@@ -117,5 +118,10 @@ final class ShapeRenderer {
         final int g = Math.round(((argb >>> 8) & 255) * shade);
         final int b = Math.round((argb & 255) * shade);
         return a << 24 | r << 16 | g << 8 | b;
+    }
+
+    /** Minecraft 26.2 sprite interpolation uses normalized 0..1 local coordinates. */
+    static float atlasCoordinate(final float minimum, final float maximum, final float local) {
+        return minimum + (maximum - minimum) * local;
     }
 }

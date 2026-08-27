@@ -50,6 +50,11 @@ final class BlockService {
         recomputeAround(block.world(), block.x(), block.y(), block.z());
     }
 
+    /** Persists an explicitly edited state without immediately overwriting manual debug-stick values. */
+    void putExact(final SpecialBlock block) {
+        persistAndBroadcast(block);
+    }
+
     SpecialBlock remove(final String world, final int x, final int y, final int z) {
         final BlockPosKey pos = new BlockPosKey(x, y, z);
         final SpecialBlock removed = map(world).remove(pos);
@@ -63,6 +68,16 @@ final class BlockService {
         broadcast(world, WireProtocol.remove(world, x, y, z));
         recomputeAround(world, x, y, z);
         return removed;
+    }
+
+    void removeStructure(final SpecialBlock block) {
+        remove(block.world(), block.x(), block.y(), block.z());
+        if (block.shape() != ShapeType.DOOR) return;
+        final int otherY = (block.flags() & SpecialBlock.DOOR_UPPER) != 0 ? block.y() - 1 : block.y() + 1;
+        final SpecialBlock other = get(block.world(), block.x(), otherY, block.z());
+        if (other != null && other.shape() == ShapeType.DOOR) {
+            remove(other.world(), other.x(), other.y(), other.z());
+        }
     }
 
     void sync(final Player player) {

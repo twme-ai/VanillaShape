@@ -13,6 +13,10 @@ VanillaShape 是一套配對使用的 **PaperMC 插件 + Fabric 客戶端模組*
 - 不註冊伺服器未知的自訂方塊，也不傳送資源包。
 - Paper 以 SQLite 按世界、X/Y/Z 儲存特殊方塊，重新啟動後仍會保留。
 - 玩家加入或切換世界時完整同步；編輯時即時傳送增量更新。
+- 特殊方塊有可堆疊的原版物品表示；物品 PDC 保存形狀、完整材質與狀態，右鍵即可放置，滑鼠中鍵可拾取目標狀態。
+- 原版除錯棒可直接選取並循環特殊方塊的適用狀態；Shift 反向循環。
+- 可用指令替換特殊方塊形狀、把原版方塊轉換成特殊方塊，或把特殊方塊還原成原版實體方塊。
+- 安裝 Axiom 時會透過官方 AxiomClientAPI 加入 `VanillaShape` Editor 工具；可放置、替換與刪除特殊方塊。
 - 直立半磚使用與原版樓梯一致的相對狀態：`straight`、`inner_left`、`inner_right`、`outer_left`、`outer_right`。Paper 會在相鄰方塊變更時重新計算狀態。
 - 依需求，目前特殊方塊只有顯示效果，**沒有伺服器碰撞箱**；Paper 世界中的對應位置保持空氣。
 
@@ -34,9 +38,15 @@ flowchart LR
 
 ## 安裝
 
-1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.1.0.jar`。
-2. 每位需要看見特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.1.0.jar`。
+1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.2.0.jar`。
+2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.2.0.jar`。
 3. 啟動伺服器。資料庫會建立於 `plugins/VanillaShape/blocks.db`。
+
+若同時使用 Axiom：
+
+- 客戶端照常安裝閉源 `Axiom` 模組；它已內含 AxiomClientAPI，不需要再手動安裝 API JAR。
+- 伺服器可同時安裝 [AxiomPaperPlugin](https://github.com/Moulberry/AxiomPaperPlugin)。VanillaShape 以 `softdepend` 共存，且 Axiom 工具操作會額外遵守 `axiom.editor.use` 與 `axiom.build.place`。
+- VanillaShape 是獨立資料層，沒有占用原版 BlockState 作為 carrier；因此 Axiom 的一般原版 Replace 工具不會誤改空氣中的特殊方塊，請改用 Editor 內的 `VanillaShape` 工具。
 
 沒有安裝 Fabric 模組的玩家仍可連線，但特殊方塊位置在他們眼中是空氣。
 
@@ -48,7 +58,12 @@ flowchart LR
 /vshape place <wall|fence|fence_gate|slab|stairs|door|trapdoor|vertical_slab> [blockdata]
 /vshape remove
 /vshape material <blockdata>
-/vshape state <facing|top|open|hinge|waterlogged> <value>
+/vshape state <property> <value>
+/vshape give <shape> [blockdata] [amount]
+/vshape palette [blockdata]
+/vshape replace <shape> [blockdata]
+/vshape convert <shape> [blockdata]
+/vshape restore
 /vshape inspect
 /vshape list
 ```
@@ -63,9 +78,50 @@ flowchart LR
 /vshape material minecraft:diamond_ore
 /vshape state facing east
 /vshape state open true
+/vshape palette minecraft:polished_andesite
+/vshape replace fence minecraft:oak_planks
 ```
 
 移除、修改材質與修改狀態時，直接將準星對準 Fabric 顯示的特殊方塊。
+
+### 物品欄與拾取
+
+`/vshape palette [blockdata]` 會把八種形狀各一個放進玩家物品欄；`/vshape give` 可取得指定形狀與數量。物品本身仍是原版方塊物品，所以不需要資源包，但名稱、說明與 PDC 會標記其 VanillaShape 形狀和狀態。
+
+- 拿著物品右鍵原版方塊表面：放在相鄰空氣格。
+- 拿著物品右鍵既有特殊方塊：沿命中的面相鄰放置。
+- 準星對著特殊方塊按滑鼠中鍵：把該方塊的完整形狀、材質與狀態取到物品欄。
+- 生存模式會消耗物品；創造模式不消耗。
+
+### 除錯棒
+
+主手拿原版除錯棒並指向特殊方塊：
+
+- 左鍵選擇下一個可用狀態欄位。
+- 右鍵循環目前欄位的值。
+- 按住 Shift 時反向選擇／循環。
+
+可用欄位依形狀限制。例如牆與柵欄支援 `north/east/south/west`，樓梯支援 `facing/half/corner/waterlogged`，門支援 `facing/open/hinge/powered`。門的上下半部會一起更新。相鄰方塊日後變動時，連接與角落狀態仍可能按自動連接規則重算。
+
+### Axiom Editor
+
+VanillaShape 使用 [AxiomClientAPI](https://github.com/Moulberry/AxiomClientAPI) 的公開 `CustomTool` 介面，沒有修改或反編譯 Axiom 本體。進入 Axiom Editor 後選擇 `VanillaShape` 工具，主手拿一個 VanillaShape 物品：
+
+- 右鍵：在準星所指表面放置。
+- Enter：用主手物品替換準星所指的特殊方塊。
+- Delete：刪除準星所指的特殊方塊。
+
+預覽選取框由 Axiom 的 Region API 繪製；真正寫入仍由 Paper 驗證世界邊界、主手物品和權限後保存至 SQLite。
+
+### 權限
+
+| 權限 | 用途 | 預設 |
+|---|---|---|
+| `vanillashape.admin` | `/vshape` 管理指令 | OP |
+| `vanillashape.use` | 從物品欄放置 | OP |
+| `vanillashape.items` | 中鍵取得特殊方塊物品 | OP |
+| `vanillashape.debugstick` | 除錯棒編輯狀態 | OP |
+| `vanillashape.axiom` | Axiom 的 VanillaShape 工具 | OP |
 
 ## 編譯與測試
 
@@ -75,18 +131,19 @@ flowchart LR
 
 產物：
 
-- Paper：`paper/build/libs/paper-0.1.0.jar`（已內含 relocated SQLite JDBC）
-- Fabric：`fabric/build/libs/fabric-0.1.0.jar`
+- Paper：`paper/build/libs/paper-0.2.0.jar`（已內含 relocated SQLite JDBC）
+- Fabric：`fabric/build/libs/fabric-0.2.0.jar`
 
-測試涵蓋 wire protocol 往返、版本拒絕、直立半磚的內外角狀態，以及直立半磚幾何與旋轉。專案也已用 Paper 26.2 build 119 實際啟動，確認插件可載入、SQLite 可建表並能正常關閉。
+測試涵蓋雙向 wire protocol、版本與尾端資料拒絕、除錯棒狀態 schema、直立半磚的內外角狀態、幾何旋轉，以及虛擬幾何 raycast。協定 v2 需要 Paper 與 Fabric 兩端一起更新至 0.2.x。
 
 ## 已知限制與下一步
 
-- 目前沒有碰撞、伺服器端選取框、破壞動畫或生存模式掉落；管理以指令完成。
+- 目前沒有碰撞、破壞動畫或一般工具的生存模式掉落；物品放置與拾取已支援。
 - 同步目前採「進入世界時全量 + 編輯時增量」，尚未按玩家追蹤中的 chunk 分片。
 - 顯示幾何在每個畫面提交；大量方塊的下一階段應改成按 chunk 快取 mesh。
 - 水浸狀態已納入協定，但尚未繪製額外水體。
 - 沒有 Fabric 模組的玩家無法看到特殊方塊，這是無資源包方案的必要取捨。
+- Axiom 原生工具只認得實際世界的原版方塊；虛擬方塊請使用整合提供的 `VanillaShape` 工具。
 
 ## 授權
 

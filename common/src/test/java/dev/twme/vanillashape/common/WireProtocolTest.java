@@ -19,4 +19,23 @@ class WireProtocolTest {
         assertThrows(java.io.IOException.class,
                 () -> WireProtocol.decode(new byte[] {(byte) 99, WireProtocol.HELLO}));
     }
+
+    @Test void rejectsTrailingPayloadData() {
+        final byte[] hello = WireProtocol.hello();
+        final byte[] invalid = java.util.Arrays.copyOf(hello, hello.length + 1);
+        assertThrows(java.io.IOException.class, () -> WireProtocol.decode(invalid));
+    }
+
+    @Test void roundTripsClientEditRequests() throws Exception {
+        final WireProtocol.Decoded debug = WireProtocol.decode(WireProtocol.debugCycle(-2, 70, 19, true));
+        assertEquals(WireProtocol.DEBUG_CYCLE, debug.action());
+        assertEquals(-2, debug.x());
+        assertEquals(70, debug.y());
+        assertEquals(19, debug.z());
+        assertEquals(true, debug.reverse());
+
+        final WireProtocol.Decoded place = WireProtocol.decode(WireProtocol.axiomPlace(10, -4, 30));
+        assertEquals(WireProtocol.AXIOM_PLACE, place.action());
+        assertEquals(30, place.z());
+    }
 }

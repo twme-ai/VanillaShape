@@ -3,5 +3,6 @@
 build/
 **/build/
 run/
+**/logs/
 *.iml
 .server-test/

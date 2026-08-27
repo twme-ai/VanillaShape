@@ -4,6 +4,7 @@ import dev.twme.vanillashape.common.CornerShape;
 import dev.twme.vanillashape.common.Direction;
 import dev.twme.vanillashape.common.ShapeType;
 import dev.twme.vanillashape.common.SpecialBlock;
+import dev.twme.vanillashape.common.StateSchema;
 import org.bukkit.Bukkit;
 import org.bukkit.FluidCollisionMode;
 import org.bukkit.Material;
@@ -25,8 +26,15 @@ import java.util.Locale;
 
 final class ShapeCommand implements CommandExecutor, TabCompleter {
     private final BlockService blocks;
+    private final ShapeItemFactory shapeItems;
+    private final PlacementService placements;
 
-    ShapeCommand(final BlockService blocks) { this.blocks = blocks; }
+    ShapeCommand(final BlockService blocks, final ShapeItemFactory shapeItems,
+                 final PlacementService placements) {
+        this.blocks = blocks;
+        this.shapeItems = shapeItems;
+        this.placements = placements;
+    }
 
     @Override public boolean onCommand(
             final CommandSender sender, final Command command, final String label, final String[] args) {
@@ -41,6 +49,11 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
                 case "remove" -> remove(player);
                 case "material" -> material(player, args);
                 case "state" -> state(player, args);
+                case "give" -> give(player, args);
+                case "palette" -> palette(player, args);
+                case "replace" -> replace(player, args);
+                case "convert" -> convert(player, args);
+                case "restore" -> restore(player);
                 case "inspect" -> inspect(player);
                 case "list" -> list(player);
                 default -> help(player);
@@ -78,17 +91,7 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
         final SpecialBlock lower = new SpecialBlock(world, target.getX(), target.getY(), target.getZ(),
                 shape, material, facing, CornerShape.STRAIGHT, 0);
 
-        if (shape == ShapeType.DOOR) {
-            final Block upperBlock = target.getRelative(BlockFace.UP);
-            if (!upperBlock.getType().isAir() || blocks.get(world, upperBlock.getX(), upperBlock.getY(), upperBlock.getZ()) != null) {
-                throw new IllegalArgumentException("A door needs two empty blocks of height.");
-            }
-            blocks.put(lower);
-            blocks.put(new SpecialBlock(world, target.getX(), target.getY() + 1, target.getZ(),
-                    shape, material, facing, CornerShape.STRAIGHT, SpecialBlock.DOOR_UPPER));
-        } else {
-            blocks.put(lower);
-        }
+        placements.place(player, target, lower, false);
         player.sendMessage("§aPlaced " + shape.name().toLowerCase(Locale.ROOT)
                 + " at " + target.getX() + " " + target.getY() + " " + target.getZ() + ".");
         return true;
@@ -96,12 +99,7 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
 
     private boolean remove(final Player player) {
         final SpecialBlock target = requireTarget(player);
-        blocks.remove(target.world(), target.x(), target.y(), target.z());
-        if (target.shape() == ShapeType.DOOR) {
-            final int counterpartY = (target.flags() & SpecialBlock.DOOR_UPPER) != 0
-                    ? target.y() - 1 : target.y() + 1;
-            blocks.remove(target.world(), target.x(), counterpartY, target.z());
-        }
+        blocks.removeStructure(target);
         player.sendMessage("§aRemoved the special block.");
         return true;
     }
@@ -110,7 +108,7 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
         if (args.length < 2) throw new IllegalArgumentException("Usage: /vshape material <blockdata>");
         final SpecialBlock target = requireTarget(player);
         final String value = parseMaterial(join(args, 1)).getAsString();
-        blocks.put(target.withMaterial(value));
+        blocks.putExact(target.withMaterial(value));
         if (target.shape() == ShapeType.DOOR) updateDoorCounterpart(target, block -> block.withMaterial(value));
         player.sendMessage("§aMaterial set to " + value + ".");
         return true;
@@ -118,35 +116,87 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
 
     private boolean state(final Player player, final String[] args) {
         if (args.length != 3) throw new IllegalArgumentException(
-                "Usage: /vshape state <facing|top|open|hinge|waterlogged> <value>");
+                "Usage: /vshape state <property> <value>");
         final SpecialBlock target = requireTarget(player);
         final String property = args[1].toLowerCase(Locale.ROOT);
         final String value = args[2].toLowerCase(Locale.ROOT);
-        final SpecialBlock updated;
-        if (property.equals("facing")) {
-            try { updated = target.withFacing(Direction.valueOf(value.toUpperCase(Locale.ROOT))); }
-            catch (final RuntimeException error) { throw new IllegalArgumentException("Facing must be north/east/south/west."); }
-        } else {
-            final int bit = switch (property) {
-                case "top" -> SpecialBlock.TOP;
-                case "open" -> SpecialBlock.OPEN;
-                case "waterlogged" -> SpecialBlock.WATERLOGGED;
-                case "hinge" -> SpecialBlock.HINGE_RIGHT;
-                default -> throw new IllegalArgumentException("Unknown state property: " + property);
-            };
-            final boolean enabled = property.equals("hinge")
-                    ? switch (value) { case "right" -> true; case "left" -> false;
-                        default -> throw new IllegalArgumentException("Hinge must be left or right."); }
-                    : parseBoolean(value);
-            updated = target.withFlags(enabled ? target.flags() | bit : target.flags() & ~bit);
-        }
-        blocks.put(updated);
+        final SpecialBlock updated = StateSchema.withValue(target, property, value);
+        blocks.putExact(updated);
         if (target.shape() == ShapeType.DOOR) {
             updateDoorCounterpart(target, block -> new SpecialBlock(block.world(), block.x(), block.y(), block.z(),
                     block.shape(), updated.material(), updated.facing(), updated.corner(),
                     (updated.flags() & ~SpecialBlock.DOOR_UPPER) | (block.flags() & SpecialBlock.DOOR_UPPER)));
         }
         player.sendMessage("§aUpdated " + property + ".");
+        return true;
+    }
+
+    private boolean give(final Player player, final String[] args) {
+        if (args.length < 2 || args.length > 4) {
+            throw new IllegalArgumentException("Usage: /vshape give <shape> [blockdata] [amount]");
+        }
+        final ShapeType shape = parseShape(args[1]);
+        final String material = args.length >= 3 ? parseMaterial(args[2]).getAsString()
+                : heldMaterial(player).getAsString();
+        final int amount = args.length == 4 ? parseAmount(args[3]) : 1;
+        giveItem(player, template(player, shape, material), amount);
+        player.sendMessage("§aAdded a " + shape.name().toLowerCase(Locale.ROOT) + " item to your inventory.");
+        return true;
+    }
+
+    private boolean palette(final Player player, final String[] args) {
+        if (args.length > 2) throw new IllegalArgumentException("Usage: /vshape palette [blockdata]");
+        final String material = args.length == 2 ? parseMaterial(args[1]).getAsString()
+                : heldMaterial(player).getAsString();
+        for (final ShapeType shape : ShapeType.values()) giveItem(player, template(player, shape, material), 1);
+        player.sendMessage("§aAdded all " + ShapeType.values().length + " VanillaShape blocks to your inventory.");
+        return true;
+    }
+
+    private boolean replace(final Player player, final String[] args) {
+        if (args.length < 2) throw new IllegalArgumentException("Usage: /vshape replace <shape> [blockdata]");
+        final SpecialBlock target = requireTarget(player);
+        final ShapeType shape = parseShape(args[1]);
+        final String material = args.length >= 3 ? parseMaterial(join(args, 2)).getAsString() : target.material();
+        final SpecialBlock replacement = new SpecialBlock(target.world(), target.x(), target.y(), target.z(),
+                shape, material, target.facing(), target.corner(), target.flags() & ~SpecialBlock.DOOR_UPPER);
+        placements.replace(player, target, replacement, false);
+        player.sendMessage("§aReplaced the target with " + shape.name().toLowerCase(Locale.ROOT) + ".");
+        return true;
+    }
+
+    private boolean convert(final Player player, final String[] args) {
+        if (args.length < 2) throw new IllegalArgumentException("Usage: /vshape convert <shape> [blockdata]");
+        final ShapeType shape = parseShape(args[1]);
+        final RayTraceResult hit = player.rayTraceBlocks(7, FluidCollisionMode.NEVER);
+        if (hit == null || hit.getHitBlock() == null) {
+            throw new IllegalArgumentException("Look at a vanilla block to convert it.");
+        }
+        final Block target = hit.getHitBlock();
+        if (target.getType().isAir()) throw new IllegalArgumentException("Look at a non-air vanilla block.");
+        final String world = BlockService.worldKey(target.getWorld());
+        if (blocks.get(world, target.getX(), target.getY(), target.getZ()) != null) {
+            throw new IllegalArgumentException("A VanillaShape block already exists there.");
+        }
+        final BlockData original = target.getBlockData();
+        final String material = args.length >= 3 ? parseMaterial(join(args, 2)).getAsString()
+                : original.getAsString();
+        target.setType(Material.AIR, false);
+        try {
+            placements.place(player, target, template(player, shape, material), false);
+        } catch (final RuntimeException error) {
+            target.setBlockData(original, false);
+            throw error;
+        }
+        player.sendMessage("§aConverted the vanilla block into a VanillaShape "
+                + shape.name().toLowerCase(Locale.ROOT) + ".");
+        return true;
+    }
+
+    private boolean restore(final Player player) {
+        final SpecialBlock target = requireTarget(player);
+        placements.restore(target, player.getWorld());
+        player.sendMessage("§aRestored the material as vanilla backing block(s).");
         return true;
     }
 
@@ -172,7 +222,9 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
         player.sendMessage("§e/vshape place <wall|fence|fence_gate|slab|stairs|door|trapdoor|vertical_slab> [blockdata]");
         player.sendMessage("§e/vshape remove §7— remove the rendered block in your crosshair");
         player.sendMessage("§e/vshape material <blockdata>");
-        player.sendMessage("§e/vshape state <facing|top|open|hinge|waterlogged> <value>");
+        player.sendMessage("§e/vshape state <property> <value>");
+        player.sendMessage("§e/vshape give <shape> [blockdata] [amount] | palette [blockdata]");
+        player.sendMessage("§e/vshape replace <shape> [blockdata] | convert <shape> [blockdata] | restore");
         player.sendMessage("§e/vshape inspect | list");
         return true;
     }
@@ -187,7 +239,7 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
             final java.util.function.UnaryOperator<SpecialBlock> change) {
         final int otherY = (target.flags() & SpecialBlock.DOOR_UPPER) != 0 ? target.y() - 1 : target.y() + 1;
         final SpecialBlock other = blocks.get(target.world(), target.x(), otherY, target.z());
-        if (other != null && other.shape() == ShapeType.DOOR) blocks.put(change.apply(other));
+        if (other != null && other.shape() == ShapeType.DOOR) blocks.putExact(change.apply(other));
     }
 
     private static BlockData heldMaterial(final Player player) {
@@ -217,35 +269,49 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
         };
     }
 
-    private static boolean parseBoolean(final String value) {
-        return switch (value) {
-            case "true", "yes", "on", "1" -> true;
-            case "false", "no", "off", "0" -> false;
-            default -> throw new IllegalArgumentException("Value must be true or false.");
-        };
-    }
-
     private static String join(final String[] args, final int start) {
         return String.join("", Arrays.copyOfRange(args, start, args.length));
     }
 
     @Override public List<String> onTabComplete(
             final CommandSender sender, final Command command, final String alias, final String[] args) {
-        if (args.length == 1) return match(args[0], "place", "remove", "material", "state", "inspect", "list");
-        if (args.length == 2 && args[0].equalsIgnoreCase("place")) {
+        if (args.length == 1) return match(args[0], "place", "remove", "material", "state", "give",
+                "palette", "replace", "convert", "restore", "inspect", "list");
+        if (args.length == 2 && (args[0].equalsIgnoreCase("place")
+                || args[0].equalsIgnoreCase("give") || args[0].equalsIgnoreCase("replace")
+                || args[0].equalsIgnoreCase("convert"))) {
             return match(args[1], Arrays.stream(ShapeType.values()).map(value -> value.name().toLowerCase(Locale.ROOT)).toArray(String[]::new));
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("state")) {
-            return match(args[1], "facing", "top", "open", "hinge", "waterlogged");
-        }
-        if (args.length == 3 && args[0].equalsIgnoreCase("state")) {
-            return switch (args[1].toLowerCase(Locale.ROOT)) {
-                case "facing" -> match(args[2], "north", "east", "south", "west");
-                case "hinge" -> match(args[2], "left", "right");
-                default -> match(args[2], "true", "false");
-            };
+            return match(args[1], "facing", "half", "corner", "open", "hinge", "powered",
+                    "waterlogged", "north", "east", "south", "west");
         }
         return List.of();
+    }
+
+    private void giveItem(final Player player, final SpecialBlock template, final int amount) {
+        final var overflow = player.getInventory().addItem(shapeItems.create(template, amount));
+        overflow.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+    }
+
+    private static SpecialBlock template(final Player player, final ShapeType shape, final String material) {
+        return new SpecialBlock(BlockService.worldKey(player.getWorld()), 0, 0, 0,
+                shape, material, facing(player), CornerShape.STRAIGHT, 0);
+    }
+
+    private static ShapeType parseShape(final String value) {
+        try { return ShapeType.parse(value); }
+        catch (final RuntimeException error) { throw new IllegalArgumentException("Unknown shape: " + value); }
+    }
+
+    private static int parseAmount(final String value) {
+        try {
+            final int amount = Integer.parseInt(value);
+            if (amount < 1 || amount > 64) throw new NumberFormatException();
+            return amount;
+        } catch (final NumberFormatException error) {
+            throw new IllegalArgumentException("Amount must be from 1 to 64.");
+        }
     }
 
     private static List<String> match(final String prefix, final String... values) {
