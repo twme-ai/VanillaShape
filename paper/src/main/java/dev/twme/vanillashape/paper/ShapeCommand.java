@@ -29,12 +29,14 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
     private final BlockService blocks;
     private final ShapeItemFactory shapeItems;
     private final PlacementService placements;
+    private final InteractionService interactions;
 
     ShapeCommand(final BlockService blocks, final ShapeItemFactory shapeItems,
-                 final PlacementService placements) {
+                 final PlacementService placements, final InteractionService interactions) {
         this.blocks = blocks;
         this.shapeItems = shapeItems;
         this.placements = placements;
+        this.interactions = interactions;
     }
 
     @Override public boolean onCommand(
@@ -53,6 +55,7 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
                 case "give" -> give(player, args);
                 case "palette" -> palette(player, args);
                 case "replace" -> replace(player, args);
+                case "replacemode" -> replaceMode(player, args);
                 case "convert" -> convert(player, args);
                 case "restore" -> restore(player);
                 case "inspect" -> inspect(player);
@@ -84,13 +87,16 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
             throw new IllegalArgumentException("A special block already exists there.");
         }
 
-        final String material = args.length >= 3
-                ? parseMaterial(join(args, 2)).getAsString()
-                : heldMaterial(player).getAsString();
+        final String model = shape == ShapeType.MODEL
+                ? args.length >= 3 ? parseMaterial(args[2]).getAsString()
+                : heldMaterial(player).getAsString() : "";
+        final String material = shape == ShapeType.MODEL
+                ? args.length >= 4 ? parseMaterial(args[3]).getAsString() : heldMaterial(player).getAsString()
+                : args.length >= 3 ? parseMaterial(join(args, 2)).getAsString() : heldMaterial(player).getAsString();
         final Direction facing = facing(player);
         final String world = BlockService.worldKey(target.getWorld());
         final SpecialBlock lower = new SpecialBlock(world, target.getX(), target.getY(), target.getZ(),
-                shape, material, facing, CornerShape.STRAIGHT, 0);
+                shape, material, model, facing, CornerShape.STRAIGHT, 0);
 
         final org.bukkit.util.Vector point = hit.getHitPosition();
         final Block support = hit.getHitBlock();
@@ -137,14 +143,20 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
     }
 
     private boolean give(final Player player, final String[] args) {
-        if (args.length < 2 || args.length > 4) {
-            throw new IllegalArgumentException("Usage: /vshape give <shape> [blockdata] [amount]");
+        if (args.length < 2 || args.length > 5) {
+            throw new IllegalArgumentException(
+                    "Usage: /vshape give <shape> [blockdata] [amount], or give model <model> [material] [amount]");
         }
         final ShapeType shape = parseShape(args[1]);
-        final String material = args.length >= 3 ? parseMaterial(args[2]).getAsString()
-                : heldMaterial(player).getAsString();
-        final int amount = args.length == 4 ? parseAmount(args[3]) : 1;
-        giveItem(player, template(player, shape, material), amount);
+        final String model = shape == ShapeType.MODEL
+                ? args.length >= 3 ? parseMaterial(args[2]).getAsString() : heldMaterial(player).getAsString() : "";
+        final String material = shape == ShapeType.MODEL
+                ? args.length >= 4 ? parseMaterial(args[3]).getAsString() : heldMaterial(player).getAsString()
+                : args.length >= 3 ? parseMaterial(args[2]).getAsString() : heldMaterial(player).getAsString();
+        final int amount = shape == ShapeType.MODEL
+                ? args.length == 5 ? parseAmount(args[4]) : 1
+                : args.length == 4 ? parseAmount(args[3]) : 1;
+        giveItem(player, template(player, shape, material).withModel(model), amount);
         player.sendMessage("§aAdded a " + shape.name().toLowerCase(Locale.ROOT) + " item to your inventory.");
         return true;
     }
@@ -153,8 +165,10 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
         if (args.length > 2) throw new IllegalArgumentException("Usage: /vshape palette [blockdata]");
         final String material = args.length == 2 ? parseMaterial(args[1]).getAsString()
                 : heldMaterial(player).getAsString();
-        for (final ShapeType shape : ShapeType.values()) giveItem(player, template(player, shape, material), 1);
-        player.sendMessage("§aAdded all " + ShapeType.values().length + " VanillaShape blocks to your inventory.");
+        for (final ShapeType shape : ShapeType.values()) {
+            if (shape != ShapeType.MODEL) giveItem(player, template(player, shape, material), 1);
+        }
+        player.sendMessage("§aAdded all fixed VanillaShape blocks to your inventory. Use 'give model' for any vanilla model.");
         return true;
     }
 
@@ -162,11 +176,30 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
         if (args.length < 2) throw new IllegalArgumentException("Usage: /vshape replace <shape> [blockdata]");
         final SpecialBlock target = requireTarget(player);
         final ShapeType shape = parseShape(args[1]);
-        final String material = args.length >= 3 ? parseMaterial(join(args, 2)).getAsString() : target.material();
+        final String model = shape == ShapeType.MODEL
+                ? args.length >= 3 ? parseMaterial(args[2]).getAsString()
+                : target.shape() == ShapeType.MODEL ? target.model() : target.material() : "";
+        final String material = shape == ShapeType.MODEL
+                ? args.length >= 4 ? parseMaterial(args[3]).getAsString() : target.material()
+                : args.length >= 3 ? parseMaterial(join(args, 2)).getAsString() : target.material();
         final SpecialBlock replacement = new SpecialBlock(target.world(), target.x(), target.y(), target.z(),
-                shape, material, target.facing(), target.corner(), target.flags() & ~SpecialBlock.DOOR_UPPER);
+                shape, material, model, target.facing(), target.corner(), target.flags() & ~SpecialBlock.DOOR_UPPER);
         placements.replace(player, target, replacement, false);
         player.sendMessage("§aReplaced the target with " + shape.name().toLowerCase(Locale.ROOT) + ".");
+        return true;
+    }
+
+    private boolean replaceMode(final Player player, final String[] args) {
+        if (args.length > 2) throw new IllegalArgumentException("Usage: /vshape replacemode [on|off|toggle]");
+        final Boolean requested;
+        if (args.length == 1 || args[1].equalsIgnoreCase("toggle")) requested = null;
+        else if (args[1].equalsIgnoreCase("on")) requested = true;
+        else if (args[1].equalsIgnoreCase("off")) requested = false;
+        else throw new IllegalArgumentException("Replacement mode must be on, off, or toggle.");
+        final boolean enabled = interactions.setReplacementMode(player, requested);
+        player.sendMessage(enabled
+                ? "§aReplacement mode enabled. Right-click a VanillaShape block with a block item."
+                : "§eReplacement mode disabled.");
         return true;
     }
 
@@ -184,14 +217,15 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
             throw new IllegalArgumentException("A VanillaShape block already exists there.");
         }
         final BlockData original = target.getBlockData();
-        final String material = args.length >= 3 ? parseMaterial(join(args, 2)).getAsString()
-                : original.getAsString();
+        final String material = args.length >= 3 ? parseMaterial(join(args, 2)).getAsString() : original.getAsString();
         target.setType(Material.AIR, false);
         try {
             final org.bukkit.util.Vector point = hit.getHitPosition();
             // Conversion occupies the clicked half of this same block; PlacementResolver normally
             // receives the outward face of a separate support block, so invert it here.
-            placements.place(player, target, template(player, shape, material), false,
+            final SpecialBlock template = template(player, shape, material)
+                    .withModel(shape == ShapeType.MODEL ? original.getAsString() : "");
+            placements.place(player, target, template, false,
                     face(hit.getHitBlockFace().getOppositeFace()), unit(point.getX() - target.getX()),
                     unit(point.getY() - target.getY()), unit(point.getZ() - target.getZ()));
         } catch (final RuntimeException error) {
@@ -215,6 +249,7 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
         player.sendMessage("§e" + block.shape() + " §7@ " + block.x() + " " + block.y() + " " + block.z());
         player.sendMessage("§7material=" + block.material() + ", facing=" + block.facing()
                 + ", corner=" + block.corner() + ", flags=" + block.flags());
+        if (block.shape() == ShapeType.MODEL) player.sendMessage("§7model=" + block.model());
         return true;
     }
 
@@ -229,12 +264,15 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
     }
 
     private boolean help(final Player player) {
-        player.sendMessage("§e/vshape place <wall|fence|fence_gate|slab|stairs|door|trapdoor|vertical_slab> [blockdata]");
+        player.sendMessage("§e/vshape place <fixed-shape> [material]");
+        player.sendMessage("§e/vshape place model <vanilla-blockdata> [material]");
         player.sendMessage("§e/vshape remove §7— remove the rendered block in your crosshair");
         player.sendMessage("§e/vshape material <blockdata>");
         player.sendMessage("§e/vshape state <property> <value>");
-        player.sendMessage("§e/vshape give <shape> [blockdata] [amount] | palette [blockdata]");
-        player.sendMessage("§e/vshape replace <shape> [blockdata] | convert <shape> [blockdata] | restore");
+        player.sendMessage("§e/vshape give <shape> [blockdata] [amount] | give model <model> [material] [amount]");
+        player.sendMessage("§e/vshape palette [blockdata]");
+        player.sendMessage("§e/vshape replace <shape> [blockdata] | replacemode [on|off|toggle]");
+        player.sendMessage("§e/vshape convert <shape> [blockdata] | restore");
         player.sendMessage("§e/vshape inspect | list");
         return true;
     }
@@ -286,7 +324,10 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
     @Override public List<String> onTabComplete(
             final CommandSender sender, final Command command, final String alias, final String[] args) {
         if (args.length == 1) return match(args[0], "place", "remove", "material", "state", "give",
-                "palette", "replace", "convert", "restore", "inspect", "list");
+                "palette", "replace", "replacemode", "convert", "restore", "inspect", "list");
+        if (args.length == 2 && args[0].equalsIgnoreCase("replacemode")) {
+            return match(args[1], "on", "off", "toggle");
+        }
         if (args.length == 2 && (args[0].equalsIgnoreCase("place")
                 || args[0].equalsIgnoreCase("give") || args[0].equalsIgnoreCase("replace")
                 || args[0].equalsIgnoreCase("convert"))) {

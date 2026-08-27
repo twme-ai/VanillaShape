@@ -1,4 +1,4 @@
-# VanillaShape 同步協定 v4
+# VanillaShape 同步協定 v5
 
 通道：`vanillashape:sync`
 
@@ -6,7 +6,7 @@
 
 | 欄位 | 型別 | 說明 |
 |---|---|---|
-| version | u8 | 目前為 `4` |
+| version | u8 | 目前為 `5` |
 | action | u8 | 動作編號 |
 
 字串格式為 `u16 byteLength + UTF-8 bytes`。解碼器會拒絕版本不符、未知 enum、截斷字串、非有限命中座標、超出 `0..1` 的命中座標，以及動作資料後的多餘 bytes。
@@ -27,6 +27,7 @@
 | 10 | `AXIOM_REPLACE` | Fabric → Paper | x/y/z + 保留 boolean |
 | 11 | `AXIOM_DELETE` | Fabric → Paper | x/y/z + 保留 boolean |
 | 12 | `BREAK_BLOCK` | Fabric → Paper | x/y/z + 保留 boolean |
+| 13 | `INTERACT_BLOCK` | Fabric → Paper | x/y/z + 保留 boolean |
 
 ## 流程
 
@@ -44,6 +45,7 @@
 | x, y, z | i32 × 3 |
 | shape | u8 enum ordinal |
 | material BlockData | string |
+| model BlockData | string；固定形狀為空字串，`MODEL` 為任意原版模型狀態 |
 | facing | u8 enum ordinal |
 | corner | u8 enum ordinal |
 | flags | i32 bitset |
@@ -60,4 +62,4 @@
 
 Paper 使用 face 與命中位置決定直立半磚佔據哪一半。側面放置會靠向支撐方塊；頂面或底面依命中位置選半，中央區域使用 Paper 上的玩家 yaw。方向由伺服器重新判定，不能由客戶端直接指定結果。
 
-enum ordinal 與 flags 的權威定義位於 `common` 子專案。協定 v4 不向下相容，Paper 與 Fabric 必須一起更新。
+enum ordinal 與 flags 的權威定義位於 `common` 子專案。牆另保存中央 `up` 與四向 `tall` bit，從而精確表達原版的 `none/low/tall`。協定 v5 不向下相容，Paper 與 Fabric 必須一起更新。

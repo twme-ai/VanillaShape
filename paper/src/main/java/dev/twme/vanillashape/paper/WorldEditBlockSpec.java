@@ -16,7 +16,7 @@ import java.util.Set;
 import java.util.function.UnaryOperator;
 
 /** Parsed WorldEdit block-list entry and optional exact matching fields. */
-record WorldEditBlockSpec(SpecialBlock template, boolean materialSpecified,
+record WorldEditBlockSpec(SpecialBlock template, boolean materialSpecified, boolean modelSpecified,
                           boolean flagsSpecified, Set<String> stateProperties) {
     static final String PREFIX = "vanillashape:";
 
@@ -48,10 +48,12 @@ record WorldEditBlockSpec(SpecialBlock template, boolean materialSpecified,
         String material = "minecraft:stone";
         int flags = 0;
         boolean materialSpecified = false;
+        boolean modelSpecified = false;
         boolean flagsSpecified = false;
         final Set<String> properties = new LinkedHashSet<>();
         SpecialBlock template = new SpecialBlock("minecraft:overworld", 0, 0, 0,
-                shape, material, Direction.NORTH, CornerShape.STRAIGHT, flags);
+                shape, material, shape == ShapeType.MODEL ? "minecraft:stone" : "",
+                Direction.NORTH, CornerShape.STRAIGHT, flags);
 
         if (nbtStart >= 0) {
             if (!input.endsWith("}")) throw new IllegalArgumentException("Missing closing '}' in " + input);
@@ -72,6 +74,13 @@ record WorldEditBlockSpec(SpecialBlock template, boolean materialSpecified,
                         material = materialNormalizer.apply(value);
                         materialSpecified = true;
                         template = template.withMaterial(material);
+                    }
+                    case "model" -> {
+                        if (!(tag.value() instanceof String value)) {
+                            throw new IllegalArgumentException("model must be an SNBT string");
+                        }
+                        template = template.withModel(materialNormalizer.apply(value));
+                        modelSpecified = true;
                     }
                     case "flags" -> {
                         if (!(tag.value() instanceof Number value)) {
@@ -97,11 +106,12 @@ record WorldEditBlockSpec(SpecialBlock template, boolean materialSpecified,
                 }
             }
         }
-        return new WorldEditBlockSpec(template, materialSpecified, flagsSpecified, properties);
+        return new WorldEditBlockSpec(template, materialSpecified, modelSpecified, flagsSpecified, properties);
     }
 
     boolean matches(final SpecialBlock block) {
         if (block.shape() != template.shape()) return false;
+        if (modelSpecified && !block.model().equals(template.model())) return false;
         if (materialSpecified && !block.material().equals(template.material())) return false;
         if (flagsSpecified && block.flags() != template.flags()) return false;
         for (final String property : stateProperties) {

@@ -15,6 +15,16 @@ class WireProtocolTest {
         assertEquals(original, decoded.block());
     }
 
+    @Test void roundTripsArbitraryModelAndInteraction() throws Exception {
+        final SpecialBlock original = new SpecialBlock("minecraft:overworld", 3, 70, -4,
+                ShapeType.MODEL, "minecraft:glass", "minecraft:oak_button[face=wall,facing=east,powered=false]",
+                Direction.EAST, CornerShape.STRAIGHT, 0);
+        assertEquals(original, WireProtocol.decode(WireProtocol.upsert(original)).block());
+        final WireProtocol.Decoded interaction = WireProtocol.decode(WireProtocol.interactBlock(3, 70, -4));
+        assertEquals(WireProtocol.INTERACT_BLOCK, interaction.action());
+        assertEquals(-4, interaction.z());
+    }
+
     @Test void rejectsOtherProtocolVersions() {
         assertThrows(java.io.IOException.class,
                 () -> WireProtocol.decode(new byte[] {(byte) 99, WireProtocol.HELLO}));

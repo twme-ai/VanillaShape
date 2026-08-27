@@ -1,10 +1,10 @@
 # WorldEdit / FastAsyncWorldEdit 整合
 
-實作版本：VanillaShape 0.3.0（2026-08-27）。目前以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
+實作版本：VanillaShape 0.4.0（2026-08-27）。目前以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
 
 ## 使用方式
 
-Paper 端安裝 WorldEdit 或 FAWE 後，VanillaShape 會透過 `softdepend` 自動啟用整合。使用者需要 `vanillashape.worldedit`；八個 shape ID 會由 WorldEdit 的 block parser 提供參數補全：
+Paper 端安裝 WorldEdit 或 FAWE 後，VanillaShape 會透過 `softdepend` 自動啟用整合。使用者需要 `vanillashape.worldedit`；九個 shape ID 會由 WorldEdit 的 block parser 提供參數補全：
 
 ```text
 vanillashape:wall
@@ -15,6 +15,14 @@ vanillashape:stairs
 vanillashape:door
 vanillashape:trapdoor
 vanillashape:vertical_slab
+vanillashape:model
+```
+
+`model` 會把任意原版 BlockData 的 baked model 當作幾何，例如按鈕、藤蔓、告示牌、草、珊瑚與壓力板：
+
+```text
+//set vanillashape:model{model:"minecraft:oak_button[face=wall,facing=east,powered=false]",material:"minecraft:glass"}
+//set vanillashape:model{model:"minecraft:vine[north=true]",material:"minecraft:warped_planks"}
 ```
 
 只寫 ID 會使用石頭材質與該形狀的預設狀態。標準 WorldEdit 可用 SNBT 指定材質與狀態：
@@ -61,9 +69,10 @@ Proxy NBT 的核心欄位：
 
 ```text
 id: "vanillashape:proxy"
-version: 1
+version: 2
 shape: "vertical_slab"
 material: "minecraft:oak_log[axis=x]"
+model: ""
 facing: "east"
 corner: "straight"
 flags: 0
@@ -80,8 +89,9 @@ proxy 只存在於 parser、extent、history、clipboard 與 schematic 中，不
 | fence_gate | oak_fence_gate |
 | door | oak_door |
 | trapdoor | oak_trapdoor |
+| model | `model` 欄位指定的真正原版 BlockState |
 
-這讓 WorldEdit 的既有 transform 能正確處理旋轉與鏡像；解碼時材質取自 marker，可轉換狀態則以 transform 後的 BlockState 為準。
+這讓 WorldEdit 的既有 transform 能正確處理旋轉與鏡像；解碼時材質取自 marker，可轉換狀態則以 transform 後的 BlockState 為準。`model` 使用本身的原版狀態作 carrier，因此按鈕、告示牌、藤蔓等方向屬性也能隨 `//rotate`／`//flip` 轉換。
 
 ## FAWE 處理
 

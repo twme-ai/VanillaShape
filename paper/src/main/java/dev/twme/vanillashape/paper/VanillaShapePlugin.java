@@ -12,6 +12,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -30,6 +31,7 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
     private ShapeItemFactory shapeItems;
     private PlacementService placements;
     private DebugStickService debugStick;
+    private InteractionService interactions;
     private WorldEditIntegration worldEdit;
 
     @Override public void onEnable() {
@@ -40,6 +42,7 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
             shapeItems = new ShapeItemFactory(this);
             placements = new PlacementService(blocks);
             debugStick = new DebugStickService(blocks);
+            interactions = new InteractionService(this, blocks, shapeItems);
         } catch (final Exception error) {
             getLogger().log(Level.SEVERE, "Could not open VanillaShape block database", error);
             Bukkit.getPluginManager().disablePlugin(this);
@@ -50,7 +53,7 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
         Bukkit.getMessenger().registerIncomingPluginChannel(this, WireProtocol.CHANNEL, this);
         Bukkit.getPluginManager().registerEvents(this, this);
 
-        final ShapeCommand executor = new ShapeCommand(blocks, shapeItems, placements);
+        final ShapeCommand executor = new ShapeCommand(blocks, shapeItems, placements, interactions);
         final PluginCommand command = Objects.requireNonNull(getCommand("vshape"));
         command.setExecutor(executor);
         command.setTabCompleter(executor);
@@ -109,6 +112,16 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
             }
             case WireProtocol.PLACE_ITEM -> {
                 requirePermission(player, "vanillashape.use");
+                // A VanillaShape item normally places beside the rendered block. While material
+                // replacement mode is active, reinterpret the same click as an interaction with
+                // that supporting block so both ordinary block items and shape items can supply
+                // the replacement material.
+                if (interactions.replacementMode(player)) {
+                    final int[] support = supportingPosition(request.x(), request.y(), request.z(), request.face());
+                    interactions.interact(player, requireNearTarget(player,
+                            support[0], support[1], support[2]));
+                    break;
+                }
                 requireNear(player, request.x(), request.y(), request.z());
                 placeHeld(player, request.x(), request.y(), request.z(), true,
                         request.face(), request.hitX(), request.hitY(), request.hitZ());
@@ -122,6 +135,11 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
                 requirePermission(player, "vanillashape.break");
                 final var target = requireNearTarget(player, request.x(), request.y(), request.z());
                 breakBlock(player, target);
+            }
+            case WireProtocol.INTERACT_BLOCK -> {
+                requirePermission(player, "vanillashape.use");
+                final var target = requireNearTarget(player, request.x(), request.y(), request.z());
+                interactions.interact(player, target);
             }
             case WireProtocol.AXIOM_PLACE -> {
                 requireAxiom(player, true);
@@ -174,6 +192,19 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
 
     @EventHandler public void onWorldChange(final PlayerChangedWorldEvent event) {
         blocks.sync(event.getPlayer());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onVanillaBlockPlaced(final BlockPlaceEvent event) {
+        final Block changed = event.getBlockPlaced();
+        blocks.neighborChanged(changed.getWorld(), changed.getX(), changed.getY(), changed.getZ());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onVanillaBlockBroken(final BlockBreakEvent event) {
+        final Block changed = event.getBlock();
+        Bukkit.getScheduler().runTask(this, () -> blocks.neighborChanged(
+                changed.getWorld(), changed.getX(), changed.getY(), changed.getZ()));
     }
 
     private void placeHeld(final Player player, final int x, final int y, final int z,
@@ -282,6 +313,18 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
             case UP -> PlacementFace.UP;
             case DOWN -> PlacementFace.DOWN;
             default -> throw new IllegalArgumentException("Unsupported placement face " + face);
+        };
+    }
+
+    private static int[] supportingPosition(final int x, final int y, final int z,
+                                            final PlacementFace face) {
+        return switch (face) {
+            case NORTH -> new int[] {x, y, z + 1};
+            case EAST -> new int[] {x - 1, y, z};
+            case SOUTH -> new int[] {x, y, z - 1};
+            case WEST -> new int[] {x + 1, y, z};
+            case UP -> new int[] {x, y - 1, z};
+            case DOWN -> new int[] {x, y + 1, z};
         };
     }
 

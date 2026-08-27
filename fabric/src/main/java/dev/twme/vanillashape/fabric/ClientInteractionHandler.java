@@ -43,14 +43,17 @@ public final class ClientInteractionHandler {
                     client.player.isShiftKeyDown()));
             return true;
         }
-        if (!isShapeItem(held)) return false;
-        final BlockPos support = new BlockPos(hit.block().x(), hit.block().y(), hit.block().z());
-        final BlockPos target = support.relative(hit.face());
-        send(WireProtocol.placeItem(target.getX(), target.getY(), target.getZ(),
-                PlacementFace.valueOf(hit.face().name()),
-                local(hit.location().x - support.getX()),
-                local(hit.location().y - support.getY()),
-                local(hit.location().z - support.getZ())));
+        if (isShapeItem(held)) {
+            final BlockPos support = new BlockPos(hit.block().x(), hit.block().y(), hit.block().z());
+            final BlockPos target = support.relative(hit.face());
+            send(WireProtocol.placeItem(target.getX(), target.getY(), target.getZ(),
+                    PlacementFace.valueOf(hit.face().name()),
+                    local(hit.location().x - support.getX()),
+                    local(hit.location().y - support.getY()),
+                    local(hit.location().z - support.getZ())));
+        } else {
+            send(WireProtocol.interactBlock(hit.block().x(), hit.block().y(), hit.block().z()));
+        }
         return true;
     }
 

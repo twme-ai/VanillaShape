@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 /** Versioned Paper plugin-message payload shared with the Fabric client. */
 public final class WireProtocol {
     public static final String CHANNEL = "vanillashape:sync";
-    public static final int VERSION = 4;
+    public static final int VERSION = 5;
     public static final byte HELLO = 1;
     public static final byte RESET = 2;
     public static final byte UPSERT = 3;
@@ -23,6 +23,7 @@ public final class WireProtocol {
     public static final byte AXIOM_REPLACE = 10;
     public static final byte AXIOM_DELETE = 11;
     public static final byte BREAK_BLOCK = 12;
+    public static final byte INTERACT_BLOCK = 13;
 
     private WireProtocol() {}
 
@@ -63,6 +64,9 @@ public final class WireProtocol {
     public static byte[] breakBlock(final int x, final int y, final int z) {
         return coordinate(BREAK_BLOCK, x, y, z, false);
     }
+    public static byte[] interactBlock(final int x, final int y, final int z) {
+        return coordinate(INTERACT_BLOCK, x, y, z, false);
+    }
 
     public static Decoded decode(final byte[] bytes) throws IOException {
         try (var in = new DataInputStream(new ByteArrayInputStream(bytes))) {
@@ -79,7 +83,7 @@ public final class WireProtocol {
                 }
                 case REMOVE -> new Decoded(action, readString(in), null,
                         in.readInt(), in.readInt(), in.readInt(), false, null, 0, 0, 0);
-                case DEBUG_SELECT, DEBUG_CYCLE, PICK_ITEM, BREAK_BLOCK,
+                case DEBUG_SELECT, DEBUG_CYCLE, PICK_ITEM, BREAK_BLOCK, INTERACT_BLOCK,
                         AXIOM_REPLACE, AXIOM_DELETE -> new Decoded(
                         action, null, null, in.readInt(), in.readInt(), in.readInt(), in.readBoolean(),
                         null, 0, 0, 0);
@@ -155,6 +159,7 @@ public final class WireProtocol {
         out.writeInt(block.x()); out.writeInt(block.y()); out.writeInt(block.z());
         out.writeByte(block.shape().ordinal());
         writeString(out, block.material());
+        writeString(out, block.model());
         out.writeByte(block.facing().ordinal());
         out.writeByte(block.corner().ordinal());
         out.writeInt(block.flags());
@@ -165,9 +170,10 @@ public final class WireProtocol {
         final int x = in.readInt(), y = in.readInt(), z = in.readInt();
         final ShapeType shape = enumAt(ShapeType.values(), in.readUnsignedByte(), "shape");
         final String material = readString(in);
+        final String model = readString(in);
         final Direction facing = enumAt(Direction.values(), in.readUnsignedByte(), "facing");
         final CornerShape corner = enumAt(CornerShape.values(), in.readUnsignedByte(), "corner");
-        return new SpecialBlock(world, x, y, z, shape, material, facing, corner, in.readInt());
+        return new SpecialBlock(world, x, y, z, shape, material, model, facing, corner, in.readInt());
     }
 
     private static <T> T enumAt(final T[] values, final int index, final String name) throws IOException {

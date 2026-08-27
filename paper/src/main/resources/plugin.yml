@@ -8,7 +8,7 @@ softdepend: [AxiomPaper, WorldEdit, FastAsyncWorldEdit]
 commands:
   vshape:
     description: Manage VanillaShape blocks
-    usage: /vshape <place|remove|material|state|give|palette|replace|convert|restore|inspect|list>
+    usage: /vshape <place|remove|material|state|give|palette|replace|replacemode|convert|restore|inspect|list>
     permission: vanillashape.admin
 permissions:
   vanillashape.admin:

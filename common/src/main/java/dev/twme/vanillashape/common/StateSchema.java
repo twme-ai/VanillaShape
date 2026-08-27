@@ -20,18 +20,25 @@ public final class StateSchema {
     private static final StateProperty POWERED = property("powered", BOOLEAN);
     private static final StateProperty HINGE = property("hinge", List.of("left", "right"));
     private static final StateProperty CORNER_SHAPE = property("corner", CORNER);
+    private static final StateProperty WALL_UP = property("up", BOOLEAN);
+    private static final StateProperty NORTH_WALL = property("north", List.of("none", "low", "tall"));
+    private static final StateProperty EAST_WALL = property("east", List.of("none", "low", "tall"));
+    private static final StateProperty SOUTH_WALL = property("south", List.of("none", "low", "tall"));
+    private static final StateProperty WEST_WALL = property("west", List.of("none", "low", "tall"));
 
     private StateSchema() {}
 
     public static List<StateProperty> properties(final ShapeType shape) {
         return switch (shape) {
-            case WALL, FENCE -> List.of(WATERLOGGED, NORTH, EAST, SOUTH, WEST);
+            case WALL -> List.of(WATERLOGGED, WALL_UP, NORTH_WALL, EAST_WALL, SOUTH_WALL, WEST_WALL);
+            case FENCE -> List.of(WATERLOGGED, NORTH, EAST, SOUTH, WEST);
             case FENCE_GATE -> List.of(DIRECTION, OPEN, POWERED, WATERLOGGED);
             case SLAB -> List.of(HALF, WATERLOGGED);
             case STAIRS -> List.of(DIRECTION, HALF, CORNER_SHAPE, WATERLOGGED);
             case DOOR -> List.of(DIRECTION, OPEN, HINGE, POWERED);
             case TRAPDOOR -> List.of(DIRECTION, HALF, OPEN, POWERED, WATERLOGGED);
             case VERTICAL_SLAB -> List.of(DIRECTION, CORNER_SHAPE, WATERLOGGED);
+            case MODEL -> List.of();
         };
     }
 
@@ -51,10 +58,11 @@ public final class StateSchema {
             case "waterlogged" -> bool(block, SpecialBlock.WATERLOGGED);
             case "open" -> bool(block, SpecialBlock.OPEN);
             case "powered" -> bool(block, SpecialBlock.POWERED);
-            case "north" -> bool(block, SpecialBlock.NORTH);
-            case "east" -> bool(block, SpecialBlock.EAST);
-            case "south" -> bool(block, SpecialBlock.SOUTH);
-            case "west" -> bool(block, SpecialBlock.WEST);
+            case "up" -> bool(block, SpecialBlock.WALL_UP);
+            case "north" -> connection(block, SpecialBlock.NORTH, SpecialBlock.WALL_TALL_NORTH);
+            case "east" -> connection(block, SpecialBlock.EAST, SpecialBlock.WALL_TALL_EAST);
+            case "south" -> connection(block, SpecialBlock.SOUTH, SpecialBlock.WALL_TALL_SOUTH);
+            case "west" -> connection(block, SpecialBlock.WEST, SpecialBlock.WALL_TALL_WEST);
             default -> throw new IllegalArgumentException("Unknown state property: " + property);
         };
     }
@@ -75,10 +83,11 @@ public final class StateSchema {
             case "waterlogged" -> withFlag(block, SpecialBlock.WATERLOGGED, Boolean.parseBoolean(value));
             case "open" -> withFlag(block, SpecialBlock.OPEN, Boolean.parseBoolean(value));
             case "powered" -> withFlag(block, SpecialBlock.POWERED, Boolean.parseBoolean(value));
-            case "north" -> withFlag(block, SpecialBlock.NORTH, Boolean.parseBoolean(value));
-            case "east" -> withFlag(block, SpecialBlock.EAST, Boolean.parseBoolean(value));
-            case "south" -> withFlag(block, SpecialBlock.SOUTH, Boolean.parseBoolean(value));
-            case "west" -> withFlag(block, SpecialBlock.WEST, Boolean.parseBoolean(value));
+            case "up" -> withFlag(block, SpecialBlock.WALL_UP, Boolean.parseBoolean(value));
+            case "north" -> withConnection(block, value, SpecialBlock.NORTH, SpecialBlock.WALL_TALL_NORTH);
+            case "east" -> withConnection(block, value, SpecialBlock.EAST, SpecialBlock.WALL_TALL_EAST);
+            case "south" -> withConnection(block, value, SpecialBlock.SOUTH, SpecialBlock.WALL_TALL_SOUTH);
+            case "west" -> withConnection(block, value, SpecialBlock.WEST, SpecialBlock.WALL_TALL_WEST);
             default -> throw new IllegalStateException("Unhandled state property " + property.name());
         };
     }
@@ -106,6 +115,21 @@ public final class StateSchema {
 
     private static String bool(final SpecialBlock block, final int bit) {
         return Boolean.toString(has(block, bit));
+    }
+
+    private static String connection(final SpecialBlock block, final int connected, final int tall) {
+        if (!has(block, connected)) return block.shape() == ShapeType.WALL ? "none" : "false";
+        return block.shape() == ShapeType.WALL && has(block, tall) ? "tall"
+                : block.shape() == ShapeType.WALL ? "low" : "true";
+    }
+
+    private static SpecialBlock withConnection(final SpecialBlock block, final String value,
+                                               final int connected, final int tall) {
+        if (block.shape() != ShapeType.WALL) return withFlag(block, connected, Boolean.parseBoolean(value));
+        int flags = block.flags();
+        flags = value.equals("none") ? flags & ~connected : flags | connected;
+        flags = value.equals("tall") ? flags | tall : flags & ~tall;
+        return block.withFlags(flags);
     }
 
     private static SpecialBlock withFlag(final SpecialBlock block, final int bit, final boolean enabled) {

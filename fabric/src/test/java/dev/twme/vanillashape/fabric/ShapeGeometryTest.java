@@ -55,4 +55,34 @@ class ShapeGeometryTest {
                 && box.maxZ() == 13 / 16f).count());
         assertTrue(boxes.stream().noneMatch(box -> box.maxX() - box.minX() > 2 / 16f));
     }
+
+    @Test void wallUsesIndependentVanillaPostLowAndTallStates() {
+        final int flags = SpecialBlock.WALL_UP | SpecialBlock.NORTH | SpecialBlock.SOUTH
+                | SpecialBlock.WALL_TALL_SOUTH;
+        final SpecialBlock wall = new SpecialBlock("minecraft:overworld", 0, 0, 0,
+                ShapeType.WALL, "minecraft:stone", Direction.NORTH, CornerShape.STRAIGHT, flags);
+        final var boxes = ShapeGeometry.boxes(wall);
+        assertEquals(3, boxes.size());
+        assertEquals(1, boxes.stream().filter(box -> box.minX() == .25f && box.maxX() == .75f).count());
+        assertEquals(.875f, boxes.stream().filter(box -> box.minZ() == 0).findFirst().orElseThrow().maxY());
+        assertEquals(1f, boxes.stream().filter(box -> box.maxZ() == 1).findFirst().orElseThrow().maxY());
+    }
+
+    @Test void unionSurfaceBuilderRemovesOverlappingInteriorFaces() {
+        final SpecialBlock stair = new SpecialBlock("minecraft:overworld", 0, 0, 0,
+                ShapeType.STAIRS, "minecraft:glass", Direction.NORTH, CornerShape.STRAIGHT, 0);
+        final var surfaces = ShapeGeometry.surfaces(stair, (x, y, z) -> null);
+        assertTrue(surfaces.stream().noneMatch(face -> face.direction() == net.minecraft.core.Direction.UP
+                && face.minY() == .5f && face.maxX() <= 1 && face.maxZ() <= .5f));
+    }
+
+    @Test void unionSurfaceBuilderCullsContactWithAdjacentShape() {
+        final SpecialBlock slab = new SpecialBlock("minecraft:overworld", 0, 0, 0,
+                ShapeType.SLAB, "minecraft:glass", Direction.NORTH, CornerShape.STRAIGHT, 0);
+        final var isolated = ShapeGeometry.surfaces(slab, (x, y, z) -> null);
+        final var joined = ShapeGeometry.surfaces(slab,
+                (x, y, z) -> x == 1 && y == 0 && z == 0 ? slab : null);
+        assertTrue(isolated.stream().anyMatch(face -> face.direction() == net.minecraft.core.Direction.EAST));
+        assertTrue(joined.stream().noneMatch(face -> face.direction() == net.minecraft.core.Direction.EAST));
+    }
 }

@@ -7,9 +7,12 @@ VanillaShape 是一套配對使用的 **PaperMC 插件 + Fabric 客戶端模組*
 ## 功能
 
 - 支援牆、柵欄、柵欄門、半磚、樓梯、門、地板門（trapdoor）與直立半磚。
+- `model` 通用形狀可直接重用任意原版 baked model，因此同時涵蓋藤蔓、告示牌、按鈕、草／花、珊瑚、壓力板、拉桿、火把、梯子、鐵軌等原版模型類型與完整 BlockData 狀態。
 - 形狀與材質彼此獨立；例如可製作鑽石礦材質的柵欄、橡木原木材質的樓梯。
 - 接受完整原版 `BlockData`，例如 `minecraft:oak_log[axis=x]`，保留方向性紋理與 blockstate variant。
 - 從實際 baked model 取得每一面的紋理，支援多層紋理、原版 tint、動畫與透明紋理。
+- 固定形狀先計算盒子聯集，只提交真正外表面；同一造型內部及相鄰特殊方塊的接面不會重複畫透明紋理。
+- 牆完整實作原版 `up` 與四向 `none/low/tall` 規則；上下堆疊及上方方塊碰撞形狀會正確影響柱與側邊高度。
 - 不註冊伺服器未知的自訂方塊，也不傳送資源包。
 - Paper 以 SQLite 按世界、X/Y/Z 儲存特殊方塊，重新啟動後仍會保留。
 - 玩家加入或切換世界時完整同步；編輯時即時傳送增量更新。
@@ -17,8 +20,10 @@ VanillaShape 是一套配對使用的 **PaperMC 插件 + Fabric 客戶端模組*
 - 原版除錯棒可直接選取並循環特殊方塊的適用狀態；Shift 反向循環。
 - 準星指向特殊方塊時可直接左鍵打掉；生存模式掉落保存完整形狀、材質與狀態的物品。
 - 可用指令替換特殊方塊形狀、把原版方塊轉換成特殊方塊，或把特殊方塊還原成原版實體方塊。
+- 門、地板門、柵欄門及通用模型中的門／按鈕／拉桿／可點燃狀態可以右鍵互動；按鈕會自動復位。
+- `/vshape replacemode` 可切換右鍵材質替換模式，保留目標形狀與狀態，只套用主手方塊材質。
 - 安裝 Axiom 時會透過官方 AxiomClientAPI 加入 `VanillaShape` Editor 工具；可放置、替換與刪除特殊方塊。
-- 可選整合 WorldEdit 7.4.5 或 FastAsyncWorldEdit 2.15.4：八種 `vanillashape:*` 方塊會進入參數補全，並支援 set、replace、mask、copy/cut/paste、旋轉／鏡像、Sponge v3 schematic 與 undo/redo。
+- 可選整合 WorldEdit 7.4.5 或 FastAsyncWorldEdit 2.15.4：九種 `vanillashape:*` 方塊會進入參數補全，並支援 set、replace、mask、copy/cut/paste、旋轉／鏡像、Sponge v3 schematic 與 undo/redo。
 - 直立半磚使用與原版樓梯一致的相對狀態：`straight`、`inner_left`、`inner_right`、`outer_left`、`outer_right`。Paper 會在相鄰方塊變更時重新計算狀態。
 - 直立半磚貼在側面時會靠向被點擊的支撐方塊；點擊頂面或底面時依命中位置選擇東／西／南／北半，中央位置則依玩家朝向決定。放置後會像樓梯一樣自動形成內外角。
 - 依需求，目前特殊方塊只有顯示效果，**沒有伺服器碰撞箱**；Paper 世界中的對應位置保持空氣。
@@ -41,8 +46,8 @@ flowchart LR
 
 ## 安裝
 
-1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.3.0.jar`。
-2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.3.0.jar`。
+1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.4.0.jar`。
+2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.4.0.jar`。
 3. 啟動伺服器。資料庫會建立於 `plugins/VanillaShape/blocks.db`。
 
 若同時使用 Axiom：
@@ -59,12 +64,15 @@ flowchart LR
 
 ```text
 /vshape place <wall|fence|fence_gate|slab|stairs|door|trapdoor|vertical_slab> [blockdata]
+/vshape place model <vanilla-model-blockdata> [material-blockdata]
 /vshape remove
 /vshape material <blockdata>
 /vshape state <property> <value>
 /vshape give <shape> [blockdata] [amount]
+/vshape give model <vanilla-model-blockdata> [material-blockdata] [amount]
 /vshape palette [blockdata]
 /vshape replace <shape> [blockdata]
+/vshape replacemode [on|off|toggle]
 /vshape convert <shape> [blockdata]
 /vshape restore
 /vshape inspect
@@ -83,13 +91,23 @@ flowchart LR
 /vshape state open true
 /vshape palette minecraft:polished_andesite
 /vshape replace fence minecraft:oak_planks
+/vshape give model minecraft:oak_button[face=wall,facing=north,powered=false] minecraft:glass
+/vshape convert model minecraft:diamond_block
+/vshape replacemode on
 ```
 
 移除、修改材質與修改狀態時，直接將準星對準 Fabric 顯示的特殊方塊。
 
 ### 物品欄與拾取
 
-`/vshape palette [blockdata]` 會把八種形狀各一個放進玩家物品欄；`/vshape give` 可取得指定形狀與數量。物品本身仍是原版方塊物品，所以不需要資源包，但名稱、說明與 PDC 會標記其 VanillaShape 形狀和狀態。
+`/vshape palette [blockdata]` 會把八種固定形狀各一個放進玩家物品欄；`/vshape give model ...` 可取得任意原版模型形狀，`/vshape give` 則可取得指定形狀與數量。物品本身仍是原版方塊物品，所以不需要資源包，但名稱、說明與 PDC 會標記其 VanillaShape 形狀、模型、材質和狀態。
+
+### 互動與材質替換
+
+- 空手或拿一般物品右鍵門、地板門、柵欄門，可切換開關。
+- `model` 形狀若其 BlockData 實作原版 `Openable`、`Powerable` 或 `Lightable`，右鍵會切換對應狀態；按鈕在 20 tick 後自動復位。
+- `/vshape replacemode on` 後，主手拿方塊物品右鍵任一 VanillaShape 方塊，會保留幾何與狀態並把 `material` 換成該物品的完整 BlockData。`off` 關閉，`toggle` 或省略參數可切換。
+- 互動是虛擬狀態操作；由於 backing block 仍是空氣，目前不輸出實體紅石訊號，也不提供壓力板踩踏偵測。
 
 - 拿著物品右鍵原版方塊表面：放在相鄰空氣格。
 - 拿著物品右鍵既有特殊方塊：沿命中的面相鄰放置。
@@ -142,6 +160,14 @@ vanillashape:stairs
 vanillashape:door
 vanillashape:trapdoor
 vanillashape:vertical_slab
+vanillashape:model
+```
+
+通用模型範例：
+
+```text
+//set vanillashape:model{model:"minecraft:oak_button[face=wall,facing=east,powered=false]",material:"minecraft:glass"}
+//set vanillashape:model{model:"minecraft:vine[north=true]",material:"minecraft:warped_planks"}
 ```
 
 省略狀態時使用石頭材質、north、straight 與全 false。WorldEdit 的完整狀態使用 SNBT：
@@ -168,10 +194,10 @@ shape-only mask 會匹配該形狀的所有材質；指定欄位時只比較指�
 
 產物：
 
-- Paper：`paper/build/libs/paper-0.3.0.jar`（已內含 relocated SQLite JDBC）
-- Fabric：`fabric/build/libs/fabric-0.3.0.jar`
+- Paper：`paper/build/libs/paper-0.4.0.jar`（已內含 relocated SQLite JDBC）
+- Fabric：`fabric/build/libs/fabric-0.4.0.jar`
 
-測試涵蓋雙向 wire protocol、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、直立半磚方向與內外角、柵欄門幾何、neutral overlay、虛擬幾何 raycast，以及 WorldEdit／FAWE 的 proxy、mask、history、clipboard、旋轉、schematic 和非同步批次。協定 v4 需要 Paper 與 Fabric 兩端一起更新至 0.3.0。
+測試涵蓋雙向 wire protocol、任意模型資料、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、原版牆狀態、外表面聯集、直立半磚方向與內外角、柵欄門幾何、neutral overlay、虛擬幾何 raycast，以及 WorldEdit／FAWE 的 proxy、mask、history、clipboard、旋轉、schematic 和非同步批次。協定 v5 需要 Paper 與 Fabric 兩端一起更新至 0.4.0。
 
 ## 已知限制與下一步
 
@@ -179,6 +205,7 @@ shape-only mask 會匹配該形狀的所有材質；指定欄位時只比較指�
 - 同步目前採「進入世界時全量 + 編輯時增量」，尚未按玩家追蹤中的 chunk 分片。
 - 顯示幾何在每個畫面提交；大量方塊的下一階段應改成按 chunk 快取 mesh。
 - 水浸狀態已納入協定，但尚未繪製額外水體。
+- `model` 支援原版 JSON baked model；告示牌文字、旗幟圖案、箱子／床等 block-entity 動態 renderer 內容不屬於 baked model，目前只會顯示其可取得的靜態模型部分。
 - 沒有 Fabric 模組的玩家無法看到特殊方塊，這是無資源包方案的必要取捨。
 - Axiom 原生工具只認得實際世界的原版方塊；虛擬方塊請使用整合提供的 `VanillaShape` 工具。
 - WorldEdit／FAWE 的一般選區命令已支援；只直接枚舉 Minecraft 原生 `BlockType.REGISTRY`、完全不使用 WorldEdit parser 的第三方 GUI 仍看不到虛擬 ID。

@@ -23,6 +23,8 @@ final class DebugStickService {
 
     void select(final Player player, final SpecialBlock target, final boolean reverse) {
         final List<StateProperty> properties = StateSchema.properties(target.shape());
+        if (properties.isEmpty()) throw new IllegalArgumentException(
+                "This model stores its state in model BlockData; use /vshape replace model or WorldEdit.");
         final String selected = selections.get(player.getUniqueId());
         final int current = indexOf(properties, selected);
         final int next = current < 0 ? (reverse ? properties.size() - 1 : 0)
@@ -34,6 +36,8 @@ final class DebugStickService {
 
     void cycle(final Player player, final SpecialBlock target, final boolean reverse) {
         final List<StateProperty> properties = StateSchema.properties(target.shape());
+        if (properties.isEmpty()) throw new IllegalArgumentException(
+                "This model stores its state in model BlockData; use /vshape replace model or WorldEdit.");
         final String selected = selections.get(player.getUniqueId());
         final StateProperty property = properties.get(Math.max(0, indexOf(properties, selected)));
         selections.put(player.getUniqueId(), property.name());

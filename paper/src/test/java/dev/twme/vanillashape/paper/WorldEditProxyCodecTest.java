@@ -46,4 +46,17 @@ class WorldEditProxyCodecTest {
                 WorldEditIntegration.sourceMask("//copy -e -m "
                         + "vanillashape:stairs[{material:\"minecraft:oak_log[axis=x]\"}] -b"));
     }
+
+    @Test void parsesGenericModelAndKeepsShapeOnlyMaskGeneric() {
+        final WorldEditBlockSpec exact = WorldEditBlockSpec.parse(
+                "vanillashape:model{model:\"minecraft:oak_button[face=wall,facing=east,powered=false]\","
+                        + "material:\"minecraft:glass\"}", value -> value);
+        assertEquals(ShapeType.MODEL, exact.template().shape());
+        assertEquals("minecraft:oak_button[face=wall,facing=east,powered=false]", exact.template().model());
+        assertTrue(exact.matches(exact.template()));
+        assertFalse(exact.matches(exact.template().withModel("minecraft:vine[north=true]")));
+        final WorldEditBlockSpec shapeOnly = WorldEditBlockSpec.parse("vanillashape:model", value -> value);
+        assertTrue(shapeOnly.matches(exact.template()));
+
+    }
 }

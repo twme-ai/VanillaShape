@@ -74,7 +74,7 @@ final class VanillaShapeExtent extends AbstractDelegateExtent {
         final BlockPosKey positionKey = key(position);
         synchronized (pendingLock) {
             final LinCompoundTag splitMarker = splitProxyMarkers.remove(positionKey);
-            if (splitMarker != null && before != null && codec.isCarrier(base, before.shape())) {
+            if (splitMarker != null && before != null && codec.isCarrier(base, before)) {
                 base = base.toImmutableState().toBaseBlock(splitMarker);
             }
         }
@@ -87,7 +87,7 @@ final class VanillaShapeExtent extends AbstractDelegateExtent {
             throw new VanillaShapeEditException("Invalid or unsupported VanillaShape proxy data");
         }
         if (decoded.isPresent()) {
-            if (!codec.isCarrier(base, decoded.get().shape())) {
+            if (!codec.isCarrier(base, decoded.get())) {
                 synchronized (pendingLock) {
                     splitProxyMarkers.put(positionKey, base.getNbt());
                 }

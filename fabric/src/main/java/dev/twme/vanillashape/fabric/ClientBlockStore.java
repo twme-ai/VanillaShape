@@ -16,6 +16,7 @@ import java.util.Map;
 final class ClientBlockStore {
     record Hit(SpecialBlock block, Vec3 location, Direction face, double distanceSquared) {}
     private final Map<String, Map<BlockPos, SpecialBlock>> worlds = new HashMap<>();
+    private final TemplateModelResolver models = new TemplateModelResolver();
 
     void accept(final byte[] bytes) throws IOException {
         final WireProtocol.Decoded decoded = WireProtocol.decode(bytes);
@@ -41,7 +42,13 @@ final class ClientBlockStore {
         Hit nearest = null;
         for (final SpecialBlock block : map(world).values()) {
             if (!nearRayBounds(block, start, end)) continue;
-            for (final ShapeGeometry.Box box : ShapeGeometry.boxes(block)) {
+            final java.util.List<ShapeGeometry.Box> hitBoxes;
+            if (block.shape() == dev.twme.vanillashape.common.ShapeType.MODEL) {
+                final TemplateModelResolver.Bounds bounds = models.bounds(block.model());
+                hitBoxes = java.util.List.of(new ShapeGeometry.Box(bounds.minX(), bounds.minY(), bounds.minZ(),
+                        bounds.maxX(), bounds.maxY(), bounds.maxZ()));
+            } else hitBoxes = ShapeGeometry.boxes(block);
+            for (final ShapeGeometry.Box box : hitBoxes) {
                 final AABB bounds = new AABB(block.x() + box.minX(), block.y() + box.minY(), block.z() + box.minZ(),
                         block.x() + box.maxX(), block.y() + box.maxY(), block.z() + box.maxZ());
                 final var clipped = bounds.clip(start, end);
@@ -56,7 +63,7 @@ final class ClientBlockStore {
         return nearest;
     }
 
-    void clear() { worlds.clear(); }
+    void clear() { worlds.clear(); models.clear(); }
 
     private Map<BlockPos, SpecialBlock> map(final String world) {
         return worlds.computeIfAbsent(world, ignored -> new HashMap<>());

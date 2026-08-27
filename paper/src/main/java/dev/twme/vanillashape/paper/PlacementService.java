@@ -8,6 +8,12 @@ import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Block;
+import org.bukkit.block.BlockFace;
+import org.bukkit.block.data.BlockData;
+import org.bukkit.block.data.Directional;
+import org.bukkit.block.data.FaceAttachable;
+import org.bukkit.block.data.MultipleFacing;
+import org.bukkit.block.data.Rotatable;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -26,10 +32,53 @@ final class PlacementService {
     SpecialBlock place(final Player player, final Block target, final SpecialBlock template,
                        final boolean consumeItem, final PlacementFace clickedFace,
                        final float hitX, final float hitY, final float hitZ) {
-        final SpecialBlock resolved = PlacementResolver.forPlacement(
+        SpecialBlock resolved = PlacementResolver.forPlacement(
                 template, PlacementResolver.playerFacing(player.getLocation().getYaw()),
                 clickedFace, hitX, hitY, hitZ);
+        if (resolved.shape() == ShapeType.MODEL) resolved = orientModel(resolved, player, clickedFace);
         return placeResolved(player, target, resolved, consumeItem);
+    }
+
+    private static SpecialBlock orientModel(final SpecialBlock template, final Player player,
+                                            final PlacementFace clickedFace) {
+        final BlockData data = org.bukkit.Bukkit.createBlockData(template.model());
+        final BlockFace outward = bukkitFace(clickedFace);
+        if (data instanceof FaceAttachable attachable) {
+            attachable.setAttachedFace(switch (clickedFace) {
+                case UP -> FaceAttachable.AttachedFace.FLOOR;
+                case DOWN -> FaceAttachable.AttachedFace.CEILING;
+                default -> FaceAttachable.AttachedFace.WALL;
+            });
+        }
+        if (data instanceof Directional directional) {
+            final BlockFace facing = switch (clickedFace) {
+                case NORTH, EAST, SOUTH, WEST -> outward;
+                default -> playerFacing(player);
+            };
+            if (directional.getFaces().contains(facing)) directional.setFacing(facing);
+        }
+        if (data instanceof Rotatable rotatable) rotatable.setRotation(playerFacing(player));
+        if (data instanceof MultipleFacing multiple) {
+            for (final BlockFace face : multiple.getAllowedFaces()) multiple.setFace(face, false);
+            final BlockFace attachment = outward.getOppositeFace();
+            if (multiple.getAllowedFaces().contains(attachment)) multiple.setFace(attachment, true);
+        }
+        return template.withModel(data.getAsString());
+    }
+
+    private static BlockFace playerFacing(final Player player) {
+        return switch (PlacementResolver.playerFacing(player.getLocation().getYaw())) {
+            case NORTH -> BlockFace.NORTH; case EAST -> BlockFace.EAST;
+            case SOUTH -> BlockFace.SOUTH; case WEST -> BlockFace.WEST;
+        };
+    }
+
+    private static BlockFace bukkitFace(final PlacementFace face) {
+        return switch (face) {
+            case NORTH -> BlockFace.NORTH; case EAST -> BlockFace.EAST;
+            case SOUTH -> BlockFace.SOUTH; case WEST -> BlockFace.WEST;
+            case UP -> BlockFace.UP; case DOWN -> BlockFace.DOWN;
+        };
     }
 
     private SpecialBlock placeResolved(final Player player, final Block target,
@@ -78,7 +127,8 @@ final class PlacementService {
             if (!upper.getType().isAir()) throw new IllegalArgumentException("The upper backing block is not air.");
         }
         blocks.removeStructure(base);
-        lower.setBlockData(org.bukkit.Bukkit.createBlockData(base.material()), false);
+        lower.setBlockData(org.bukkit.Bukkit.createBlockData(
+                base.shape() == ShapeType.MODEL ? base.model() : base.material()), false);
         if (base.shape() == ShapeType.DOOR) {
             lower.getRelative(0, 1, 0).setBlockData(org.bukkit.Bukkit.createBlockData(base.material()), false);
         }

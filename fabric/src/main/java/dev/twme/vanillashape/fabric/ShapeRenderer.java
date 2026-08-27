@@ -18,6 +18,7 @@ import net.minecraft.world.phys.Vec3;
 final class ShapeRenderer {
     private final ClientBlockStore store;
     private final ModelMaterialResolver materials = new ModelMaterialResolver();
+    private final TemplateModelResolver models = new TemplateModelResolver();
 
     ShapeRenderer(final ClientBlockStore store) { this.store = store; }
 
@@ -44,36 +45,88 @@ final class ShapeRenderer {
             poseStack.pushPose();
             poseStack.translate(block.x() - camera.x, block.y() - camera.y, block.z() - camera.z);
             context.submitNodeCollector().submitCustomGeometry(poseStack, renderType,
-                    (pose, buffer) -> draw(block, material, pose, buffer, light));
+                    (pose, buffer) -> draw(block, material, pose, buffer, light, world, level, pos));
             poseStack.popPose();
         }
     }
 
-    void clearMaterials() { materials.clear(); }
+    void clearMaterials() { materials.clear(); models.clear(); }
 
-    private static void draw(final SpecialBlock block, final ModelMaterialResolver.Resolved material,
-                             final PoseStack.Pose pose, final VertexConsumer out, final int light) {
-        for (final ShapeGeometry.Box box : ShapeGeometry.boxes(block)) {
-            face(out, pose, material.face(Direction.DOWN), Direction.DOWN, light,
-                    box.minX(), box.minY(), box.maxZ(), box.maxX(), box.minY(), box.minZ(), box);
-            face(out, pose, material.face(Direction.UP), Direction.UP, light,
-                    box.minX(), box.maxY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ(), box);
-            face(out, pose, material.face(Direction.NORTH), Direction.NORTH, light,
-                    box.maxX(), box.minY(), box.minZ(), box.minX(), box.maxY(), box.minZ(), box);
-            face(out, pose, material.face(Direction.SOUTH), Direction.SOUTH, light,
-                    box.minX(), box.minY(), box.maxZ(), box.maxX(), box.maxY(), box.maxZ(), box);
-            face(out, pose, material.face(Direction.WEST), Direction.WEST, light,
-                    box.minX(), box.minY(), box.minZ(), box.minX(), box.maxY(), box.maxZ(), box);
-            face(out, pose, material.face(Direction.EAST), Direction.EAST, light,
-                    box.maxX(), box.minY(), box.maxZ(), box.maxX(), box.maxY(), box.minZ(), box);
+    private void draw(final SpecialBlock block, final ModelMaterialResolver.Resolved material,
+                      final PoseStack.Pose pose, final VertexConsumer out, final int light, final String world,
+                      final ClientLevel level, final BlockPos pos) {
+        if (block.shape() == dev.twme.vanillashape.common.ShapeType.MODEL) {
+            drawModel(block, material, pose, out, light, level, pos);
+            return;
         }
+        for (final ShapeGeometry.Surface surface : ShapeGeometry.surfaces(block, (dx, dy, dz) ->
+                store.get(world, new BlockPos(block.x() + dx, block.y() + dy, block.z() + dz)))) {
+            if (boundary(surface) && (level.getBlockState(pos.relative(surface.direction())).isSolidRender()
+                    || virtualModelOccludes(block, surface.direction(), level))) continue;
+            face(out, pose, material.face(surface.direction()), surface.direction(), light, surface);
+        }
+    }
+
+    private void drawModel(final SpecialBlock block, final ModelMaterialResolver.Resolved material,
+                           final PoseStack.Pose pose, final VertexConsumer out, final int light,
+                           final ClientLevel level, final BlockPos pos) {
+        for (final TemplateModelResolver.Quad quad : models.resolve(block.model())) {
+            if (quad.cullDirection() != null
+                    && (level.getBlockState(pos.relative(quad.cullDirection())).isSolidRender()
+                    || virtualOccludes(block, quad.cullDirection(), level))) continue;
+            final float shade = quad.shade() ? shade(quad.direction()) : 1;
+            for (final ModelMaterialResolver.Face layer : material.face(quad.direction())) {
+                final int color = shade(layer.color(), shade);
+                for (final TemplateModelResolver.Vertex vertex : quad.vertices()) {
+                    out.addVertex(pose, vertex.x(), vertex.y(), vertex.z())
+                            .setColor(color)
+                            .setUv(atlasCoordinate(layer.sprite().getU0(), layer.sprite().getU1(), vertex.u()),
+                                    atlasCoordinate(layer.sprite().getV0(), layer.sprite().getV1(), vertex.v()))
+                            .setOverlay(noOverlay()).setLight(light)
+                            .setNormal(pose, quad.direction().getStepX(), quad.direction().getStepY(),
+                                    quad.direction().getStepZ());
+                }
+            }
+        }
+    }
+
+    private boolean virtualOccludes(final SpecialBlock block, final Direction direction,
+                                    final ClientLevel level) {
+        final String world = level.dimension().identifier().toString();
+        final SpecialBlock neighbor = store.get(world, new BlockPos(block.x(), block.y(), block.z())
+                .relative(direction));
+        if (neighbor == null) return false;
+        if (neighbor.shape() == dev.twme.vanillashape.common.ShapeType.MODEL) {
+            return models.occludesFullCube(neighbor.model());
+        }
+        return ShapeGeometry.coversFace(neighbor, direction.getOpposite());
+    }
+
+    private boolean virtualModelOccludes(final SpecialBlock block, final Direction direction,
+                                         final ClientLevel level) {
+        final String world = level.dimension().identifier().toString();
+        final SpecialBlock neighbor = store.get(world, new BlockPos(block.x(), block.y(), block.z())
+                .relative(direction));
+        return neighbor != null && neighbor.shape() == dev.twme.vanillashape.common.ShapeType.MODEL
+                && models.occludesFullCube(neighbor.model());
+    }
+
+    private static boolean boundary(final ShapeGeometry.Surface surface) {
+        final float epsilon = 1.0e-6f;
+        return switch (surface.direction()) {
+            case WEST -> surface.minX() <= epsilon;
+            case EAST -> surface.maxX() >= 1 - epsilon;
+            case DOWN -> surface.minY() <= epsilon;
+            case UP -> surface.maxY() >= 1 - epsilon;
+            case NORTH -> surface.minZ() <= epsilon;
+            case SOUTH -> surface.maxZ() >= 1 - epsilon;
+        };
     }
 
     /** The first two points describe the lower/first edge; the opposite edge is derived per face. */
     private static void face(final VertexConsumer out, final PoseStack.Pose pose,
             final java.util.List<ModelMaterialResolver.Face> layers, final Direction direction, final int light,
-            final float ax, final float ay, final float az,
-            final float bx, final float by, final float bz, final ShapeGeometry.Box box) {
+            final ShapeGeometry.Surface box) {
         for (final ModelMaterialResolver.Face material : layers) {
         final float[][] vertices = switch (direction) {
             case DOWN -> new float[][] {{box.minX(),box.minY(),box.maxZ()},{box.minX(),box.minY(),box.minZ()},
@@ -89,10 +142,7 @@ final class ShapeRenderer {
             case EAST -> new float[][] {{box.maxX(),box.minY(),box.maxZ()},{box.maxX(),box.maxY(),box.maxZ()},
                     {box.maxX(),box.maxY(),box.minZ()},{box.maxX(),box.minY(),box.minZ()}};
         };
-        final float shade = switch (direction) {
-            case DOWN -> .5f; case NORTH, SOUTH -> .8f; case WEST, EAST -> .6f; case UP -> 1f;
-        };
-        final int color = shade(material.color(), shade);
+        final int color = shade(material.color(), shade(direction));
         for (final float[] vertex : vertices) {
             final float uCoord = switch (direction) {
                 case UP, DOWN, NORTH, SOUTH -> vertex[0];
@@ -111,6 +161,12 @@ final class ShapeRenderer {
                     .setNormal(pose, direction.getStepX(), direction.getStepY(), direction.getStepZ());
         }
         }
+    }
+
+    private static float shade(final Direction direction) {
+        return switch (direction) {
+            case DOWN -> .5f; case NORTH, SOUTH -> .8f; case WEST, EAST -> .6f; case UP -> 1f;
+        };
     }
 
     private static int shade(final int argb, final float shade) {

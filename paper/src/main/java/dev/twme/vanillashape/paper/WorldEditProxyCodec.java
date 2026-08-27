@@ -22,10 +22,11 @@ import java.util.Optional;
 /** Encodes virtual states as transformable vanilla states plus a private NBT marker. */
 final class WorldEditProxyCodec {
     static final String PROXY_ID = "vanillashape:proxy";
-    private static final int VERSION = 1;
+    private static final int VERSION = 2;
 
     BaseBlock encode(final SpecialBlock block) {
-        BlockState state = proxyType(block.shape()).getDefaultState();
+        BlockState state = block.shape() == ShapeType.MODEL
+                ? modelState(block.model()) : proxyType(block.shape()).getDefaultState();
         final boolean waterlogged = has(block.flags(), SpecialBlock.WATERLOGGED);
         state = switch (block.shape()) {
             case STAIRS -> with(with(with(with(state,
@@ -53,12 +54,15 @@ final class WorldEditProxyCodec {
                     "half", has(block.flags(), SpecialBlock.TOP) ? "top" : "bottom"),
                     "open", bool(block, SpecialBlock.OPEN)), "powered", bool(block, SpecialBlock.POWERED)),
                     "waterlogged", Boolean.toString(waterlogged));
+            case MODEL -> state;
         };
+        if (block.shape() == ShapeType.WALL) state = with(state, "up", bool(block, SpecialBlock.WALL_UP));
         final LinCompoundTag marker = LinCompoundTag.builder()
                 .putString("id", PROXY_ID)
                 .putInt("version", VERSION)
                 .putString("shape", lower(block.shape()))
                 .putString("material", block.material())
+                .putString("model", block.model())
                 .putString("facing", lower(block.facing()))
                 .putString("corner", lower(block.corner()))
                 .putInt("flags", block.flags())
@@ -70,10 +74,12 @@ final class WorldEditProxyCodec {
                                   final int x, final int y, final int z) {
         final LinCompoundTag marker = proxy.getNbt();
         if (marker == null || !PROXY_ID.equals(string(marker, "id"))
-                || integer(marker, "version", -1) != VERSION) return Optional.empty();
+                || integer(marker, "version", -1) < 1
+                || integer(marker, "version", -1) > VERSION) return Optional.empty();
         try {
             final ShapeType shape = ShapeType.parse(requiredString(marker, "shape"));
             final String material = requiredString(marker, "material");
+            String model = java.util.Objects.requireNonNullElse(string(marker, "model"), "");
             Direction facing = Direction.valueOf(requiredString(marker, "facing").toUpperCase(Locale.ROOT));
             CornerShape corner = CornerShape.valueOf(requiredString(marker, "corner").toUpperCase(Locale.ROOT));
             int flags = integer(marker, "flags", 0) & SpecialBlock.ALL_FLAGS;
@@ -99,6 +105,12 @@ final class WorldEditProxyCodec {
                     flags = connection(proxy, flags, "east", SpecialBlock.EAST, "none");
                     flags = connection(proxy, flags, "south", SpecialBlock.SOUTH, "none");
                     flags = connection(proxy, flags, "west", SpecialBlock.WEST, "none");
+                    flags = wallTall(proxy, flags, "north", SpecialBlock.WALL_TALL_NORTH);
+                    flags = wallTall(proxy, flags, "east", SpecialBlock.WALL_TALL_EAST);
+                    flags = wallTall(proxy, flags, "south", SpecialBlock.WALL_TALL_SOUTH);
+                    flags = wallTall(proxy, flags, "west", SpecialBlock.WALL_TALL_WEST);
+                    flags = flag(flags, SpecialBlock.WALL_UP,
+                            boolProperty(proxy, "up", flags, SpecialBlock.WALL_UP));
                     flags = waterlogged(proxy, flags);
                 }
                 case FENCE -> {
@@ -135,8 +147,12 @@ final class WorldEditProxyCodec {
                             boolProperty(proxy, "powered", flags, SpecialBlock.POWERED));
                     flags = waterlogged(proxy, flags);
                 }
+                // BaseBlock#getAsString also appends our marker SNBT; only the transformed
+                // immutable carrier state belongs in the model BlockData field.
+                case MODEL -> model = proxy.toImmutableState().getAsString();
             }
-            return Optional.of(new SpecialBlock(world, x, y, z, shape, material, facing, corner, flags));
+            return Optional.of(new SpecialBlock(world, x, y, z, shape, material, model,
+                    facing, corner, flags));
         } catch (final RuntimeException invalid) {
             return Optional.empty();
         }
@@ -147,8 +163,13 @@ final class WorldEditProxyCodec {
         return marker != null && PROXY_ID.equals(string(marker, "id"));
     }
 
-    boolean isCarrier(final BlockStateHolder<?> block, final ShapeType shape) {
-        return block.getBlockType().equals(proxyType(shape));
+    boolean isCarrier(final BlockStateHolder<?> block, final SpecialBlock expected) {
+        if (expected.shape() == ShapeType.MODEL) {
+            final int bracket = expected.model().indexOf('[');
+            final String id = bracket < 0 ? expected.model() : expected.model().substring(0, bracket);
+            return block.getBlockType().id().equals(id);
+        }
+        return block.getBlockType().equals(proxyType(expected.shape()));
     }
 
     private static BlockType proxyType(final ShapeType shape) {
@@ -160,8 +181,28 @@ final class WorldEditProxyCodec {
             case FENCE_GATE -> "minecraft:oak_fence_gate";
             case DOOR -> "minecraft:oak_door";
             case TRAPDOOR -> "minecraft:oak_trapdoor";
+            case MODEL -> throw new IllegalArgumentException("Model proxies use their own BlockData type");
         };
         return Objects.requireNonNull(BlockTypes.get(id), "WorldEdit is missing proxy type " + id);
+    }
+
+    private static BlockState modelState(final String blockData) {
+        if (blockData == null || blockData.isBlank()) {
+            throw new IllegalArgumentException("vanillashape:model requires a model BlockData value");
+        }
+        final int bracket = blockData.indexOf('[');
+        final String id = bracket < 0 ? blockData : blockData.substring(0, bracket);
+        final BlockType type = Objects.requireNonNull(BlockTypes.get(id), "Unknown model block type " + id);
+        BlockState state = type.getDefaultState();
+        if (bracket >= 0 && blockData.endsWith("]")) {
+            for (final String assignment : blockData.substring(bracket + 1, blockData.length() - 1).split(",")) {
+                final int equals = assignment.indexOf('=');
+                if (equals < 1) continue;
+                state = with(state, assignment.substring(0, equals).trim(),
+                        assignment.substring(equals + 1).trim());
+            }
+        }
+        return state;
     }
 
     @SuppressWarnings("unchecked")
@@ -208,7 +249,20 @@ final class WorldEditProxyCodec {
     }
 
     private static String wall(final SpecialBlock block, final int bit) {
-        return has(block.flags(), bit) ? "low" : "none";
+        if (!has(block.flags(), bit)) return "none";
+        final int tall = switch (bit) {
+            case SpecialBlock.NORTH -> SpecialBlock.WALL_TALL_NORTH;
+            case SpecialBlock.EAST -> SpecialBlock.WALL_TALL_EAST;
+            case SpecialBlock.SOUTH -> SpecialBlock.WALL_TALL_SOUTH;
+            case SpecialBlock.WEST -> SpecialBlock.WALL_TALL_WEST;
+            default -> 0;
+        };
+        return has(block.flags(), tall) ? "tall" : "low";
+    }
+
+    private static int wallTall(final BlockStateHolder<?> state, final int flags,
+                                final String name, final int bit) {
+        return flag(flags, bit, property(state, name, "none").equals("tall"));
     }
 
     private static String bool(final SpecialBlock block, final int bit) {

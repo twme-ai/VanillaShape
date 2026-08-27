@@ -11,7 +11,9 @@ public enum ShapeType {
     STAIRS,
     DOOR,
     TRAPDOOR,
-    VERTICAL_SLAB;
+    VERTICAL_SLAB,
+    /** Uses an arbitrary vanilla BlockData baked model as geometry. */
+    MODEL;
 
     public static ShapeType parse(final String input) {
         return valueOf(input.trim().replace('-', '_').toUpperCase(Locale.ROOT));
