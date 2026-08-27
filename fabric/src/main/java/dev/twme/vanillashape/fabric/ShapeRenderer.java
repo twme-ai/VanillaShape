@@ -9,6 +9,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.TextureAtlas;
+import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.util.LightCoordsUtil;
@@ -105,7 +106,7 @@ final class ShapeRenderer {
                     .setColor(color)
                     .setUv(atlasCoordinate(material.sprite().getU0(), material.sprite().getU1(), uCoord),
                             atlasCoordinate(material.sprite().getV0(), material.sprite().getV1(), vCoord))
-                    .setOverlay(0)
+                    .setOverlay(noOverlay())
                     .setLight(light)
                     .setNormal(pose, direction.getStepX(), direction.getStepY(), direction.getStepZ());
         }
@@ -123,5 +124,10 @@ final class ShapeRenderer {
     /** Minecraft 26.2 sprite interpolation uses normalized 0..1 local coordinates. */
     static float atlasCoordinate(final float minimum, final float maximum, final float local) {
         return minimum + (maximum - minimum) * local;
+    }
+
+    /** Zero selects the red damage row; this packed coordinate selects the neutral overlay row. */
+    static int noOverlay() {
+        return OverlayTexture.NO_OVERLAY;
     }
 }

@@ -18,6 +18,7 @@ VanillaShape 是一套配對使用的 **PaperMC 插件 + Fabric 客戶端模組*
 - 可用指令替換特殊方塊形狀、把原版方塊轉換成特殊方塊，或把特殊方塊還原成原版實體方塊。
 - 安裝 Axiom 時會透過官方 AxiomClientAPI 加入 `VanillaShape` Editor 工具；可放置、替換與刪除特殊方塊。
 - 直立半磚使用與原版樓梯一致的相對狀態：`straight`、`inner_left`、`inner_right`、`outer_left`、`outer_right`。Paper 會在相鄰方塊變更時重新計算狀態。
+- 直立半磚貼在側面時會靠向被點擊的支撐方塊；點擊頂面或底面時依命中位置選擇東／西／南／北半，中央位置則依玩家朝向決定。放置後會像樓梯一樣自動形成內外角。
 - 依需求，目前特殊方塊只有顯示效果，**沒有伺服器碰撞箱**；Paper 世界中的對應位置保持空氣。
 
 材質語意參考 [SculptPlugin](https://github.com/TWME-TW/SculptPlugin)：保存完整 BlockData，依方塊狀態選擇原版模型，再解析方向性與分層紋理。VanillaShape 的實際渲染則完全在 Fabric 客戶端執行。
@@ -38,8 +39,8 @@ flowchart LR
 
 ## 安裝
 
-1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.2.0.jar`。
-2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.2.0.jar`。
+1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.2.1.jar`。
+2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.2.1.jar`。
 3. 啟動伺服器。資料庫會建立於 `plugins/VanillaShape/blocks.db`。
 
 若同時使用 Axiom：
@@ -101,7 +102,7 @@ flowchart LR
 - 右鍵循環目前欄位的值。
 - 按住 Shift 時反向選擇／循環。
 
-可用欄位依形狀限制。例如牆與柵欄支援 `north/east/south/west`，樓梯支援 `facing/half/corner/waterlogged`，門支援 `facing/open/hinge/powered`。門的上下半部會一起更新。相鄰方塊日後變動時，連接與角落狀態仍可能按自動連接規則重算。
+可用欄位依形狀限制。例如牆與柵欄支援 `north/east/south/west`，樓梯支援 `facing/half/corner/waterlogged`，門支援 `facing/open/hinge/powered`。門的上下半部會一起更新。除錯棒與 `/vshape state` 都是精確寫入：修改當下不會觸發鄰居更新或覆寫手動值；之後若真的放置、移除或改動相鄰方塊，連接與角落狀態才會按自動連接規則重算。
 
 ### Axiom Editor
 
@@ -123,6 +124,10 @@ VanillaShape 使用 [AxiomClientAPI](https://github.com/Moulberry/AxiomClientAPI
 | `vanillashape.debugstick` | 除錯棒編輯狀態 | OP |
 | `vanillashape.axiom` | Axiom 的 VanillaShape 工具 | OP |
 
+### WorldEdit / FastAsyncWorldEdit 研究
+
+VanillaShape 的世界 carrier 是空氣，不能把不存在的 `vanillashape:*` ID 直接註冊成 WorldEdit `BlockType`。可行整合方式是註冊自訂輸入解析器來提供名稱與指令補全，再用 EditSession extent 在 WorldEdit 與 SQLite 資料層之間轉換帶 NBT 的原版 proxy。針對 WorldEdit、FAWE 與提供的 ItemsAdder-WorldEdit 實例之完整拆包結論、歷史／schematic／非同步批次設計，見 [`docs/WORLDEDIT_FAWE_INTEGRATION.md`](docs/WORLDEDIT_FAWE_INTEGRATION.md)。
+
 ## 編譯與測試
 
 ```bash
@@ -131,10 +136,10 @@ VanillaShape 使用 [AxiomClientAPI](https://github.com/Moulberry/AxiomClientAPI
 
 產物：
 
-- Paper：`paper/build/libs/paper-0.2.0.jar`（已內含 relocated SQLite JDBC）
-- Fabric：`fabric/build/libs/fabric-0.2.0.jar`
+- Paper：`paper/build/libs/paper-0.2.1.jar`（已內含 relocated SQLite JDBC）
+- Fabric：`fabric/build/libs/fabric-0.2.1.jar`
 
-測試涵蓋雙向 wire protocol、版本與尾端資料拒絕、除錯棒狀態 schema、直立半磚的內外角狀態、幾何旋轉，以及虛擬幾何 raycast。協定 v2 需要 Paper 與 Fabric 兩端一起更新至 0.2.x。
+測試涵蓋雙向 wire protocol、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、直立半磚的方向與內外角狀態、幾何旋轉、neutral overlay，以及虛擬幾何 raycast。協定 v3 需要 Paper 與 Fabric 兩端一起更新至 0.2.1。
 
 ## 已知限制與下一步
 
@@ -144,6 +149,7 @@ VanillaShape 使用 [AxiomClientAPI](https://github.com/Moulberry/AxiomClientAPI
 - 水浸狀態已納入協定，但尚未繪製額外水體。
 - 沒有 Fabric 模組的玩家無法看到特殊方塊，這是無資源包方案的必要取捨。
 - Axiom 原生工具只認得實際世界的原版方塊；虛擬方塊請使用整合提供的 `VanillaShape` 工具。
+- WorldEdit / FAWE 整合目前完成可行性與參考實作研究，尚未在正式產物啟用；不能安全地用偽造 `BlockType` 取代 parser + proxy extent。
 
 ## 授權
 

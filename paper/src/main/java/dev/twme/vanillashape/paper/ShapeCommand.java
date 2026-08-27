@@ -2,6 +2,7 @@ package dev.twme.vanillashape.paper;
 
 import dev.twme.vanillashape.common.CornerShape;
 import dev.twme.vanillashape.common.Direction;
+import dev.twme.vanillashape.common.PlacementFace;
 import dev.twme.vanillashape.common.ShapeType;
 import dev.twme.vanillashape.common.SpecialBlock;
 import dev.twme.vanillashape.common.StateSchema;
@@ -91,7 +92,11 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
         final SpecialBlock lower = new SpecialBlock(world, target.getX(), target.getY(), target.getZ(),
                 shape, material, facing, CornerShape.STRAIGHT, 0);
 
-        placements.place(player, target, lower, false);
+        final org.bukkit.util.Vector point = hit.getHitPosition();
+        final Block support = hit.getHitBlock();
+        placements.place(player, target, lower, false, face(hit.getHitBlockFace()),
+                unit(point.getX() - support.getX()), unit(point.getY() - support.getY()),
+                unit(point.getZ() - support.getZ()));
         player.sendMessage("§aPlaced " + shape.name().toLowerCase(Locale.ROOT)
                 + " at " + target.getX() + " " + target.getY() + " " + target.getZ() + ".");
         return true;
@@ -183,7 +188,12 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
                 : original.getAsString();
         target.setType(Material.AIR, false);
         try {
-            placements.place(player, target, template(player, shape, material), false);
+            final org.bukkit.util.Vector point = hit.getHitPosition();
+            // Conversion occupies the clicked half of this same block; PlacementResolver normally
+            // receives the outward face of a separate support block, so invert it here.
+            placements.place(player, target, template(player, shape, material), false,
+                    face(hit.getHitBlockFace().getOppositeFace()), unit(point.getX() - target.getX()),
+                    unit(point.getY() - target.getY()), unit(point.getZ() - target.getZ()));
         } catch (final RuntimeException error) {
             target.setBlockData(original, false);
             throw error;
@@ -312,6 +322,22 @@ final class ShapeCommand implements CommandExecutor, TabCompleter {
         } catch (final NumberFormatException error) {
             throw new IllegalArgumentException("Amount must be from 1 to 64.");
         }
+    }
+
+    private static PlacementFace face(final BlockFace face) {
+        return switch (face) {
+            case NORTH -> PlacementFace.NORTH;
+            case EAST -> PlacementFace.EAST;
+            case SOUTH -> PlacementFace.SOUTH;
+            case WEST -> PlacementFace.WEST;
+            case UP -> PlacementFace.UP;
+            case DOWN -> PlacementFace.DOWN;
+            default -> throw new IllegalArgumentException("Unsupported placement face " + face);
+        };
+    }
+
+    private static float unit(final double value) {
+        return (float) Math.max(0, Math.min(1, value));
     }
 
     private static List<String> match(final String prefix, final String... values) {

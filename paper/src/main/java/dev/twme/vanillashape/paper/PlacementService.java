@@ -1,5 +1,7 @@
 package dev.twme.vanillashape.paper;
 
+import dev.twme.vanillashape.common.PlacementFace;
+import dev.twme.vanillashape.common.PlacementResolver;
 import dev.twme.vanillashape.common.ShapeType;
 import dev.twme.vanillashape.common.SpecialBlock;
 import org.bukkit.GameMode;
@@ -18,6 +20,20 @@ final class PlacementService {
 
     SpecialBlock place(final Player player, final Block target, final SpecialBlock template,
                        final boolean consumeItem) {
+        return placeResolved(player, target, template, consumeItem);
+    }
+
+    SpecialBlock place(final Player player, final Block target, final SpecialBlock template,
+                       final boolean consumeItem, final PlacementFace clickedFace,
+                       final float hitX, final float hitY, final float hitZ) {
+        final SpecialBlock resolved = PlacementResolver.forPlacement(
+                template, PlacementResolver.playerFacing(player.getLocation().getYaw()),
+                clickedFace, hitX, hitY, hitZ);
+        return placeResolved(player, target, resolved, consumeItem);
+    }
+
+    private SpecialBlock placeResolved(final Player player, final Block target,
+                                       final SpecialBlock template, final boolean consumeItem) {
         final String world = BlockService.worldKey(target.getWorld());
         ensureEmpty(target, world, null);
         if (template.shape() == ShapeType.DOOR) {

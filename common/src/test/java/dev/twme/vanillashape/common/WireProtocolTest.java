@@ -34,8 +34,30 @@ class WireProtocolTest {
         assertEquals(19, debug.z());
         assertEquals(true, debug.reverse());
 
-        final WireProtocol.Decoded place = WireProtocol.decode(WireProtocol.axiomPlace(10, -4, 30));
+        final WireProtocol.Decoded place = WireProtocol.decode(WireProtocol.axiomPlace(
+                10, -4, 30, PlacementFace.UP, .75f, 1, .25f));
         assertEquals(WireProtocol.AXIOM_PLACE, place.action());
         assertEquals(30, place.z());
+        assertEquals(PlacementFace.UP, place.face());
+        assertEquals(.75f, place.hitX());
+    }
+
+    @Test void rejectsOutOfRangePlacementHit() {
+        assertThrows(IllegalArgumentException.class, () -> WireProtocol.placeItem(
+                0, 64, 0, PlacementFace.NORTH, Float.NaN, .5f, 0));
+        assertThrows(IllegalArgumentException.class, () -> WireProtocol.placeItem(
+                0, 64, 0, PlacementFace.NORTH, 1.1f, .5f, 0));
+    }
+
+    @Test void decoderRejectsInvalidPlacementFaceAndHit() {
+        final byte[] invalidFace = WireProtocol.placeItem(
+                0, 64, 0, PlacementFace.NORTH, .5f, .5f, .5f);
+        invalidFace[14] = (byte) 99;
+        assertThrows(java.io.IOException.class, () -> WireProtocol.decode(invalidFace));
+
+        final byte[] invalidHit = WireProtocol.placeItem(
+                0, 64, 0, PlacementFace.NORTH, .5f, .5f, .5f);
+        java.nio.ByteBuffer.wrap(invalidHit).putFloat(15, Float.NaN);
+        assertThrows(java.io.IOException.class, () -> WireProtocol.decode(invalidHit));
     }
 }

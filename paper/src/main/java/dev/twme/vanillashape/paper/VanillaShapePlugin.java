@@ -1,5 +1,6 @@
 package dev.twme.vanillashape.paper;
 
+import dev.twme.vanillashape.common.PlacementFace;
 import dev.twme.vanillashape.common.WireProtocol;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -98,7 +99,8 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
             case WireProtocol.PLACE_ITEM -> {
                 requirePermission(player, "vanillashape.use");
                 requireNear(player, request.x(), request.y(), request.z());
-                placeHeld(player, request.x(), request.y(), request.z(), true);
+                placeHeld(player, request.x(), request.y(), request.z(), true,
+                        request.face(), request.hitX(), request.hitY(), request.hitZ());
             }
             case WireProtocol.PICK_ITEM -> {
                 requirePermission(player, "vanillashape.items");
@@ -108,7 +110,8 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
             case WireProtocol.AXIOM_PLACE -> {
                 requireAxiom(player, true);
                 validateWorldPosition(player, request.x(), request.y(), request.z());
-                placeHeld(player, request.x(), request.y(), request.z(), true);
+                placeHeld(player, request.x(), request.y(), request.z(), true,
+                        request.face(), request.hitX(), request.hitY(), request.hitZ());
             }
             case WireProtocol.AXIOM_REPLACE -> {
                 requireAxiom(player, true);
@@ -139,7 +142,10 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
             requirePermission(player, "vanillashape.use");
             final Block clicked = Objects.requireNonNull(event.getClickedBlock());
             final Block target = clicked.getRelative(Objects.requireNonNull(event.getBlockFace()));
-            placements.place(player, target, shape.get(), true);
+            final org.bukkit.util.Vector hit = event.getClickedPosition() == null
+                    ? new org.bukkit.util.Vector(.5, .5, .5) : event.getClickedPosition();
+            placements.place(player, target, shape.get(), true, face(event.getBlockFace()),
+                    unit(hit.getX()), unit(hit.getY()), unit(hit.getZ()));
         } catch (final IllegalArgumentException error) {
             player.sendActionBar(net.kyori.adventure.text.Component.text(error.getMessage(),
                     net.kyori.adventure.text.format.NamedTextColor.RED));
@@ -155,10 +161,12 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
     }
 
     private void placeHeld(final Player player, final int x, final int y, final int z,
-                           final boolean consume) {
+                           final boolean consume, final PlacementFace face,
+                           final float hitX, final float hitY, final float hitZ) {
         final var template = shapeItems.read(player.getInventory().getItemInMainHand())
                 .orElseThrow(() -> new IllegalArgumentException("Hold a VanillaShape item first."));
-        placements.place(player, player.getWorld().getBlockAt(x, y, z), template, consume);
+        placements.place(player, player.getWorld().getBlockAt(x, y, z), template, consume,
+                Objects.requireNonNull(face, "placement face"), hitX, hitY, hitZ);
     }
 
     private void pick(final Player player, final dev.twme.vanillashape.common.SpecialBlock target) {
@@ -217,5 +225,21 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
                 || (placesBlocks && !player.hasPermission("axiom.build.place"))) {
             throw new IllegalArgumentException("AxiomPaper does not allow this editor operation.");
         }
+    }
+
+    private static PlacementFace face(final org.bukkit.block.BlockFace face) {
+        return switch (face) {
+            case NORTH -> PlacementFace.NORTH;
+            case EAST -> PlacementFace.EAST;
+            case SOUTH -> PlacementFace.SOUTH;
+            case WEST -> PlacementFace.WEST;
+            case UP -> PlacementFace.UP;
+            case DOWN -> PlacementFace.DOWN;
+            default -> throw new IllegalArgumentException("Unsupported placement face " + face);
+        };
+    }
+
+    private static float unit(final double value) {
+        return (float) Math.max(0, Math.min(1, value));
     }
 }

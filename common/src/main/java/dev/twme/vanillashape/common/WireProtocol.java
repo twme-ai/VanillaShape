@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 /** Versioned Paper plugin-message payload shared with the Fabric client. */
 public final class WireProtocol {
     public static final String CHANNEL = "vanillashape:sync";
-    public static final int VERSION = 2;
+    public static final int VERSION = 3;
     public static final byte HELLO = 1;
     public static final byte RESET = 2;
     public static final byte UPSERT = 3;
@@ -40,14 +40,18 @@ public final class WireProtocol {
     public static byte[] debugCycle(final int x, final int y, final int z, final boolean reverse) {
         return coordinate(DEBUG_CYCLE, x, y, z, reverse);
     }
-    public static byte[] placeItem(final int x, final int y, final int z) {
-        return coordinate(PLACE_ITEM, x, y, z, false);
+    public static byte[] placeItem(final int x, final int y, final int z,
+                                   final PlacementFace face,
+                                   final float hitX, final float hitY, final float hitZ) {
+        return placement(PLACE_ITEM, x, y, z, face, hitX, hitY, hitZ);
     }
     public static byte[] pickItem(final int x, final int y, final int z) {
         return coordinate(PICK_ITEM, x, y, z, false);
     }
-    public static byte[] axiomPlace(final int x, final int y, final int z) {
-        return coordinate(AXIOM_PLACE, x, y, z, false);
+    public static byte[] axiomPlace(final int x, final int y, final int z,
+                                   final PlacementFace face,
+                                   final float hitX, final float hitY, final float hitZ) {
+        return placement(AXIOM_PLACE, x, y, z, face, hitX, hitY, hitZ);
     }
     public static byte[] axiomReplace(final int x, final int y, final int z) {
         return coordinate(AXIOM_REPLACE, x, y, z, false);
@@ -62,17 +66,20 @@ public final class WireProtocol {
             if (version != VERSION) throw new IOException("Unsupported protocol version " + version);
             final byte action = in.readByte();
             final Decoded decoded = switch (action) {
-                case HELLO -> new Decoded(action, null, null, 0, 0, 0, false);
-                case RESET -> new Decoded(action, readString(in), null, 0, 0, 0, false);
+                case HELLO -> empty(action, null);
+                case RESET -> empty(action, readString(in));
                 case UPSERT -> {
                     final SpecialBlock block = readBlock(in);
-                    yield new Decoded(action, block.world(), block, block.x(), block.y(), block.z(), false);
+                    yield new Decoded(action, block.world(), block, block.x(), block.y(), block.z(),
+                            false, null, 0, 0, 0);
                 }
                 case REMOVE -> new Decoded(action, readString(in), null,
-                        in.readInt(), in.readInt(), in.readInt(), false);
-                case DEBUG_SELECT, DEBUG_CYCLE, PLACE_ITEM, PICK_ITEM,
-                        AXIOM_PLACE, AXIOM_REPLACE, AXIOM_DELETE -> new Decoded(
-                        action, null, null, in.readInt(), in.readInt(), in.readInt(), in.readBoolean());
+                        in.readInt(), in.readInt(), in.readInt(), false, null, 0, 0, 0);
+                case DEBUG_SELECT, DEBUG_CYCLE, PICK_ITEM,
+                        AXIOM_REPLACE, AXIOM_DELETE -> new Decoded(
+                        action, null, null, in.readInt(), in.readInt(), in.readInt(), in.readBoolean(),
+                        null, 0, 0, 0);
+                case PLACE_ITEM, AXIOM_PLACE -> readPlacement(action, in);
                 default -> throw new IOException("Unknown action " + action);
             };
             if (in.available() != 0) throw new IOException("Trailing bytes after action " + action);
@@ -80,11 +87,49 @@ public final class WireProtocol {
         }
     }
 
+    private static Decoded empty(final byte action, final String world) {
+        return new Decoded(action, world, null, 0, 0, 0, false, null, 0, 0, 0);
+    }
+
     private static byte[] coordinate(
             final byte action, final int x, final int y, final int z, final boolean reverse) {
         return packet(action, out -> {
             out.writeInt(x); out.writeInt(y); out.writeInt(z); out.writeBoolean(reverse);
         });
+    }
+
+    private static byte[] placement(
+            final byte action, final int x, final int y, final int z,
+            final PlacementFace face, final float hitX, final float hitY, final float hitZ) {
+        if (face == null) throw new IllegalArgumentException("Placement face is required");
+        validateHit(hitX, hitY, hitZ);
+        return packet(action, out -> {
+            out.writeInt(x); out.writeInt(y); out.writeInt(z);
+            out.writeByte(face.ordinal());
+            out.writeFloat(hitX); out.writeFloat(hitY); out.writeFloat(hitZ);
+        });
+    }
+
+    private static Decoded readPlacement(final byte action, final DataInputStream in) throws IOException {
+        final int x = in.readInt(), y = in.readInt(), z = in.readInt();
+        final PlacementFace face = enumAt(PlacementFace.values(), in.readUnsignedByte(), "placement face");
+        final float hitX = in.readFloat(), hitY = in.readFloat(), hitZ = in.readFloat();
+        try {
+            validateHit(hitX, hitY, hitZ);
+        } catch (final IllegalArgumentException invalid) {
+            throw new IOException(invalid.getMessage(), invalid);
+        }
+        return new Decoded(action, null, null, x, y, z, false, face, hitX, hitY, hitZ);
+    }
+
+    private static void validateHit(final float hitX, final float hitY, final float hitZ) {
+        if (!validUnit(hitX) || !validUnit(hitY) || !validUnit(hitZ)) {
+            throw new IllegalArgumentException("Placement hit coordinates must be finite values from 0 to 1");
+        }
+    }
+
+    private static boolean validUnit(final float value) {
+        return Float.isFinite(value) && value >= 0 && value <= 1;
     }
 
     private static byte[] packet(final byte action, final Writer writer) {
@@ -143,5 +188,6 @@ public final class WireProtocol {
     @FunctionalInterface private interface Writer { void write(DataOutputStream out) throws IOException; }
 
     public record Decoded(
-            byte action, String world, SpecialBlock block, int x, int y, int z, boolean reverse) {}
+            byte action, String world, SpecialBlock block, int x, int y, int z, boolean reverse,
+            PlacementFace face, float hitX, float hitY, float hitZ) {}
 }

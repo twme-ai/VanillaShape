@@ -3,6 +3,7 @@ package dev.twme.vanillashape.fabric;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ShapeRendererUvTest {
@@ -18,5 +19,11 @@ class ShapeRendererUvTest {
         assertEquals((spriteMin + spriteMax) / 2, middle);
         assertEquals(spriteMax, end);
         assertTrue(middle >= spriteMin && middle <= spriteMax);
+    }
+
+    @Test void usesNeutralEntityOverlayInsteadOfRedDamageRow() {
+        assertEquals(net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY,
+                ShapeRenderer.noOverlay());
+        assertNotEquals(0, ShapeRenderer.noOverlay());
     }
 }

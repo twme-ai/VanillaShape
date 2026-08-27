@@ -6,6 +6,7 @@ import com.moulberry.axiomclientapi.IAxiomWorldRenderContext;
 import com.moulberry.axiomclientapi.regions.BooleanRegion;
 import com.moulberry.axiomclientapi.service.RegionProvider;
 import com.moulberry.axiomclientapi.service.ToolService;
+import dev.twme.vanillashape.common.PlacementFace;
 import dev.twme.vanillashape.common.WireProtocol;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
@@ -16,6 +17,8 @@ import java.util.ServiceLoader;
 
 /** Official AxiomClientAPI tool for placing, replacing and deleting virtual blocks. */
 final class VanillaShapeAxiomTool implements CustomTool {
+    private record PlacementTarget(BlockPos position, BlockPos support,
+                                   net.minecraft.core.Direction face, Vec3 hit) {}
     private final ToolService tools = service(ToolService.class);
     private final BooleanRegion preview = service(RegionProvider.class).createBoolean();
 
@@ -28,10 +31,14 @@ final class VanillaShapeAxiomTool implements CustomTool {
     }
 
     @Override public boolean callUseTool() {
-        final BlockPos target = placementTarget();
+        final PlacementTarget target = placementTarget();
         if (target != null) {
             ClientInteractionHandler.send(WireProtocol.axiomPlace(
-                    target.getX(), target.getY(), target.getZ()));
+                    target.position().getX(), target.position().getY(), target.position().getZ(),
+                    PlacementFace.valueOf(target.face().name()),
+                    ClientInteractionHandler.local(target.hit().x - target.support().getX()),
+                    ClientInteractionHandler.local(target.hit().y - target.support().getY()),
+                    ClientInteractionHandler.local(target.hit().z - target.support().getZ())));
         }
         return true;
     }
@@ -56,20 +63,23 @@ final class VanillaShapeAxiomTool implements CustomTool {
 
     @Override public void render(final IAxiomWorldRenderContext context) {
         preview.clear();
-        final BlockPos target = placementTarget();
+        final PlacementTarget target = placementTarget();
         if (target == null) return;
-        preview.add(target.getX(), target.getY(), target.getZ());
+        preview.add(target.position().getX(), target.position().getY(), target.position().getZ());
         preview.render(context, Vec3.ZERO, Effects.SELECTION);
     }
 
-    private BlockPos placementTarget() {
+    private PlacementTarget placementTarget() {
         final ClientBlockStore.Hit custom = customTarget();
         if (custom != null) {
-            return new BlockPos(custom.block().x(), custom.block().y(), custom.block().z())
-                    .relative(custom.face());
+            final BlockPos support = new BlockPos(custom.block().x(), custom.block().y(), custom.block().z());
+            return new PlacementTarget(support.relative(custom.face()), support,
+                    custom.face(), custom.location());
         }
         final BlockHitResult vanilla = tools.raycastBlock();
-        return vanilla == null ? null : vanilla.getBlockPos().relative(vanilla.getDirection());
+        return vanilla == null ? null : new PlacementTarget(
+                vanilla.getBlockPos().relative(vanilla.getDirection()), vanilla.getBlockPos(),
+                vanilla.getDirection(), vanilla.getLocation());
     }
 
     private static ClientBlockStore.Hit customTarget() {

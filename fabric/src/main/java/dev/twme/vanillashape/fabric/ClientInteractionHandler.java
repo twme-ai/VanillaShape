@@ -1,5 +1,6 @@
 package dev.twme.vanillashape.fabric;
 
+import dev.twme.vanillashape.common.PlacementFace;
 import dev.twme.vanillashape.common.WireProtocol;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
@@ -39,9 +40,13 @@ public final class ClientInteractionHandler {
             return true;
         }
         if (!isShapeItem(held)) return false;
-        final BlockPos target = new BlockPos(hit.block().x(), hit.block().y(), hit.block().z())
-                .relative(hit.face());
-        send(WireProtocol.placeItem(target.getX(), target.getY(), target.getZ()));
+        final BlockPos support = new BlockPos(hit.block().x(), hit.block().y(), hit.block().z());
+        final BlockPos target = support.relative(hit.face());
+        send(WireProtocol.placeItem(target.getX(), target.getY(), target.getZ(),
+                PlacementFace.valueOf(hit.face().name()),
+                local(hit.location().x - support.getX()),
+                local(hit.location().y - support.getY()),
+                local(hit.location().z - support.getZ())));
         return true;
     }
 
@@ -80,5 +85,9 @@ public final class ClientInteractionHandler {
         } catch (final RuntimeException ignored) {
             // The paired Paper plugin may be absent or the connection may be closing.
         }
+    }
+
+    static float local(final double value) {
+        return (float) Math.max(0, Math.min(1, value));
     }
 }
