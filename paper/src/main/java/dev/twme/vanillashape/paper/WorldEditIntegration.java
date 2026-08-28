@@ -147,7 +147,10 @@ final class WorldEditIntegration implements Listener, AutoCloseable {
                     ? VanillaShapeClipboard.recoverFaweTiles(original, codec)
                     : VanillaShapeClipboard.fromWorldSnapshot(original, codec, snapshot);
             if (wrapped == original) return;
-            final ClipboardHolder replacement = new ClipboardHolder(wrapped);
+            // FAWE closes the old holder unless the replacement reports that it retains the
+            // original clipboard. Closing here unmaps DiskOptimizedClipboard and makes the
+            // wrapper crash on the next //paste, so explicitly transfer ownership.
+            final ClipboardHolder replacement = new VanillaShapeClipboardHolder(wrapped, original);
             replacement.setTransform(current.getTransform());
             session.setClipboard(replacement);
             plugin.getLogger().fine("Attached VanillaShape proxy data to the WorldEdit clipboard.");

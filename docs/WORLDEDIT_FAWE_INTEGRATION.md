@@ -1,6 +1,6 @@
 # WorldEdit / FastAsyncWorldEdit 整合
 
-實作版本：VanillaShape 0.4.1（2026-08-27）。目前以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
+實作版本：VanillaShape 0.4.2（2026-08-28）。目前以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
 
 ## 使用方式
 
@@ -63,7 +63,7 @@ Backing world 始終保持空氣。若操作把一般方塊寫到同一格，該
 1. `VanillaShapeBlockParser` 將 `vanillashape:*` 字串轉成原版形狀 proxy 加 VanillaShape NBT，並提供 suggestions。
 2. `VanillaShapeMaskParser` 直接查詢 `BlockService`，使 shape-only 與精確狀態 mask 不受 backing air 影響；FAWE 另以 `AliasedParser` 接上 rich-mask 路由。
 3. `VanillaShapeExtent` 在 `BEFORE_CHANGE`／`BEFORE_HISTORY` 暴露、攔截 proxy；寫入普通方塊時刪除虛擬記錄，寫入 proxy 時把 backing world 改回 air。
-4. `VanillaShapeClipboard` 保留 copy/cut 與 schematic 的 proxy NBT。FAWE 會隱藏非容器 carrier 的 tile NBT，因此載入後會從其 tile map 復原 marker；copy 完成後即使 FAWE 重用同一個 clipboard holder，也會重新包裝 snapshot，讓後續 paste 保留 VanillaShape 狀態。
+4. `VanillaShapeClipboard` 保留 copy/cut 與 schematic 的 proxy NBT。FAWE 會隱藏非容器 carrier 的 tile NBT，因此載入後會從其 tile map 復原 marker；copy 完成後即使 FAWE 重用同一個 clipboard holder，也會重新包裝 snapshot，讓後續 paste 保留 VanillaShape 狀態。`VanillaShapeClipboardHolder` 會接管 FAWE 磁碟 clipboard 的生命週期，避免 holder 替換時提前 unmap，並在 clipboard 真正清除時釋放資源。
 
 Proxy NBT 的核心欄位：
 
