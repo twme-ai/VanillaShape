@@ -21,13 +21,16 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 
 import java.lang.reflect.Field;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.logging.Level;
 
 /** Optional WorldEdit/FAWE bridge. This class is only loaded when either plugin is present. */
 final class WorldEditIntegration implements Listener, AutoCloseable {
     private static final String FAWE_ALLOWED_CLASS = VanillaShapeExtent.class.getName();
+    private static final int CLIPBOARD_WAIT_TICKS = 1_200;
     private final VanillaShapePlugin plugin;
     private final BlockService blocks;
     private final WorldEdit worldEdit;
@@ -37,6 +40,8 @@ final class WorldEditIntegration implements Listener, AutoCloseable {
     private boolean faweAllowedAdded;
     private Object faweHistorySettings;
     private Boolean originalCombineStages;
+    private final Map<LocalSession, Long> clipboardWatches = new IdentityHashMap<>();
+    private long nextClipboardWatch;
 
     private WorldEditIntegration(final VanillaShapePlugin plugin, final BlockService blocks,
                                  final boolean fawe) {
@@ -88,8 +93,15 @@ final class WorldEditIntegration implements Listener, AutoCloseable {
         if (!player.hasPermission("vanillashape.worldedit")) return;
         final var wePlayer = BukkitAdapter.adapt(player);
         final LocalSession session = worldEdit.getSessionManager().get(wePlayer);
+        // PlayerCommandPreprocessEvent runs before WorldEdit executes the command. FAWE then
+        // performs large copies asynchronously, so remember the old clipboard and wait for the
+        // one created by this exact command rather than wrapping whatever happens to be present
+        // on the following tick.
+        final ClipboardHolder previous = clipboard(session);
+        final long watch = ++nextClipboardWatch;
+        clipboardWatches.put(session, watch);
         if (schematicLoad) {
-            patchClipboardWhenReady(session, List.of(), 40);
+            patchClipboardWhenReady(session, previous, List.of(), CLIPBOARD_WAIT_TICKS, watch);
             return;
         }
         final com.sk89q.worldedit.world.World world = BukkitAdapter.adapt(player.getWorld());
@@ -97,6 +109,7 @@ final class WorldEditIntegration implements Listener, AutoCloseable {
         try {
             selection = session.getSelection(world);
         } catch (final IncompleteRegionException ignored) {
+            clipboardWatches.remove(session);
             return;
         }
         final String worldKey = BlockService.worldKey(player.getWorld());
@@ -124,40 +137,61 @@ final class WorldEditIntegration implements Listener, AutoCloseable {
                     .toList();
         } catch (final Exception invalidMask) {
             // WorldEdit will report the parser error; do not attach unfiltered virtual blocks.
+            clipboardWatches.remove(session);
             return;
         }
-        if (snapshot.isEmpty()) return;
+        if (snapshot.isEmpty()) {
+            clipboardWatches.remove(session);
+            return;
+        }
 
-        patchClipboardWhenReady(session, snapshot, 40);
+        patchClipboardWhenReady(session, previous, snapshot, CLIPBOARD_WAIT_TICKS, watch);
     }
 
     private void patchClipboardWhenReady(final LocalSession session,
+                                         final ClipboardHolder previous,
                                          final List<dev.twme.vanillashape.common.SpecialBlock> snapshot,
-                                         final int attemptsLeft) {
+                                         final int attemptsLeft,
+                                         final long watch) {
         Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!Long.valueOf(watch).equals(clipboardWatches.get(session))) return;
             final ClipboardHolder current = clipboard(session);
-            // FAWE can mutate its existing ClipboardHolder rather than replacing it. Waiting for
-            // object identity to change silently skips proxy wrapping, so only wait for no holder.
-            if (current == null) {
-                if (attemptsLeft > 1) patchClipboardWhenReady(session, snapshot, attemptsLeft - 1);
+            if (!newClipboard(previous, current)) {
+                if (attemptsLeft > 1) {
+                    patchClipboardWhenReady(session, previous, snapshot, attemptsLeft - 1, watch);
+                } else {
+                    clipboardWatches.remove(session);
+                    plugin.getLogger().fine("Timed out waiting for WorldEdit to finish creating its clipboard.");
+                }
                 return;
             }
             final Clipboard original = current.getClipboard();
             final Clipboard wrapped = snapshot.isEmpty()
                     ? VanillaShapeClipboard.recoverFaweTiles(original, codec)
                     : VanillaShapeClipboard.fromWorldSnapshot(original, codec, snapshot);
-            if (wrapped == original) return;
+            if (wrapped == original) {
+                clipboardWatches.remove(session);
+                return;
+            }
             // FAWE closes the old holder unless the replacement reports that it retains the
             // original clipboard. Closing here unmaps DiskOptimizedClipboard and makes the
             // wrapper crash on the next //paste, so explicitly transfer ownership.
             final ClipboardHolder replacement = new VanillaShapeClipboardHolder(wrapped, original);
             replacement.setTransform(current.getTransform());
             session.setClipboard(replacement);
+            clipboardWatches.remove(session);
             plugin.getLogger().fine("Attached VanillaShape proxy data to the WorldEdit clipboard.");
         });
     }
 
+    /** True only after the command replaced the clipboard that existed at preprocess time. */
+    static boolean newClipboard(final ClipboardHolder previous, final ClipboardHolder current) {
+        if (current == null || current == previous) return false;
+        return previous == null || current.getClipboard() != previous.getClipboard();
+    }
+
     @Override public void close() {
+        clipboardWatches.clear();
         HandlerList.unregisterAll(this);
         worldEdit.getEventBus().unregister(this);
         if (faweAllowedAdded && faweAllowedPlugins != null) faweAllowedPlugins.remove(FAWE_ALLOWED_CLASS);

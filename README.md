@@ -22,7 +22,7 @@ VanillaShape 是一套配對使用的 **PaperMC 插件 + Fabric 客戶端模組*
 - 可用指令替換特殊方塊形狀、把原版方塊轉換成特殊方塊，或把特殊方塊還原成原版實體方塊。
 - 門、地板門、柵欄門及通用模型中的門／按鈕／拉桿／可點燃狀態可以右鍵互動；按鈕會自動復位。
 - `/vshape replacemode` 可切換右鍵材質替換模式，保留目標形狀與狀態，只套用主手方塊材質。
-- 安裝 Axiom 時會透過官方 AxiomClientAPI 加入 `VanillaShape` Editor 工具；可放置、替換與刪除特殊方塊。
+- 安裝 Axiom 時會透過官方 AxiomClientAPI 加入 `VanillaShape` 與 `VanillaShape Clipboard` Editor 工具；可放置、替換、刪除、兩角選取、複製與批次貼上特殊方塊。
 - 可選整合 WorldEdit 7.4.5 或 FastAsyncWorldEdit 2.15.4：九種 `vanillashape:*` 方塊會進入參數補全，並支援 set、replace、mask、copy/cut/paste、旋轉／鏡像、Sponge v3 schematic 與 undo/redo。
 - 直立半磚使用與原版樓梯一致的相對狀態：`straight`、`inner_left`、`inner_right`、`outer_left`、`outer_right`。Paper 會在相鄰方塊變更時重新計算狀態。
 - 直立半磚貼在側面時會靠向被點擊的支撐方塊；點擊頂面或底面時依命中位置選擇東／西／南／北半，中央位置則依玩家朝向決定。放置後會像樓梯一樣自動形成內外角。
@@ -46,15 +46,15 @@ flowchart LR
 
 ## 安裝
 
-1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.4.2.jar`。
-2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.4.2.jar`。
+1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.5.0.jar`。
+2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.5.0.jar`。
 3. 啟動伺服器。資料庫會建立於 `plugins/VanillaShape/blocks.db`。
 
 若同時使用 Axiom：
 
 - 客戶端照常安裝閉源 `Axiom` 模組；它已內含 AxiomClientAPI，不需要再手動安裝 API JAR。
 - 伺服器可同時安裝 [AxiomPaperPlugin](https://github.com/Moulberry/AxiomPaperPlugin)。VanillaShape 以 `softdepend` 共存，且 Axiom 工具操作會額外遵守 `axiom.editor.use` 與 `axiom.build.place`。
-- VanillaShape 是獨立資料層，沒有占用原版 BlockState 作為 carrier；因此 Axiom 的一般原版 Replace 工具不會誤改空氣中的特殊方塊，請改用 Editor 內的 `VanillaShape` 工具。
+- VanillaShape 是獨立資料層，沒有占用原版 BlockState 作為 carrier；因此請使用 Editor 內的 `VanillaShape` 工具編輯單格，或以 `VanillaShape Clipboard` 複製／貼上選區。
 
 沒有安裝 Fabric 模組的玩家仍可連線，但特殊方塊位置在他們眼中是空氣。
 
@@ -135,6 +135,16 @@ VanillaShape 使用 [AxiomClientAPI](https://github.com/Moulberry/AxiomClientAPI
 
 預覽選取框由 Axiom 的 Region API 繪製；真正寫入仍由 Paper 驗證世界邊界、主手物品和權限後保存至 SQLite。
 
+若要複製選區，改選 `VanillaShape Clipboard` 工具：
+
+1. 依序右鍵選取兩個對角。
+2. 按 Enter 複製選區內的完整 VanillaShape 記錄。
+3. 右鍵一個表面，將相鄰格設為貼上原點。
+4. 按 Enter 貼上；可繼續選擇其他原點重複貼上。
+5. 按 Delete 清除選區與剪貼簿。
+
+剪貼簿由 Paper 按玩家保存，貼上會在單一 SQLite transaction 中保留 shape、material、model、方向、corner 與 flags；選區內沒有複製到特殊方塊的位置會視為虛擬空氣。為避免建立同格兩種世界狀態，若目標特殊方塊位置已有真實原版方塊，操作會拒絕並指出座標。選區上限為 16,777,216 格體積／100,000 個特殊方塊。技術研究與公開 API 邊界見 [`docs/AXIOM_INTEGRATION.md`](docs/AXIOM_INTEGRATION.md)。
+
 ### 權限
 
 | 權限 | 用途 | 預設 |
@@ -186,6 +196,8 @@ FAWE 的 rich parser 會把材質 BlockData 的 `[]` 當成自己的語法，因
 
 shape-only mask 會匹配該形狀的所有材質；指定欄位時只比較指定欄位。寫入經單一 SQLite transaction 批次提交，世界中的 backing block 仍是空氣。`//undo`／`//redo`、一般 `//copy`／`//cut`／`//paste`、`//rotate`／`//flip` 和 Sponge v3 schematic 會保存完整狀態。技術原理、ItemsAdder-WorldEdit 拆包比較與已驗證範圍見 [`docs/WORLDEDIT_FAWE_INTEGRATION.md`](docs/WORLDEDIT_FAWE_INTEGRATION.md)。
 
+FAWE 的 copy 會在背景完成。VanillaShape 會記住命令前的 clipboard，並用每個 session 的 generation 等待本次命令真正建立的新 clipboard 後才附加 proxy NBT；連續執行複製也不會把舊 snapshot 包到新結果。這避免 oak stairs／wall 等只應存在於 clipboard 的 carrier 被真正貼進伺服器世界。
+
 ## 編譯與測試
 
 ```bash
@@ -194,10 +206,10 @@ shape-only mask 會匹配該形狀的所有材質；指定欄位時只比較指�
 
 產物：
 
-- Paper：`paper/build/libs/paper-0.4.2.jar`（已內含 relocated SQLite JDBC）
-- Fabric：`fabric/build/libs/fabric-0.4.2.jar`
+- Paper：`paper/build/libs/paper-0.5.0.jar`（已內含 relocated SQLite JDBC）
+- Fabric：`fabric/build/libs/fabric-0.5.0.jar`
 
-測試涵蓋雙向 wire protocol、任意模型資料、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、原版牆狀態、外表面聯集、直立半磚方向與內外角、柵欄門幾何、neutral overlay、虛擬幾何 raycast，以及 WorldEdit／FAWE 的 proxy、mask、history、磁碟 clipboard、旋轉、schematic 和非同步批次。協定 v5 沒有變動；Paper 與 Fabric 仍應一起更新至 0.4.2。
+測試涵蓋雙向 wire protocol、Axiom 選區／貼上座標安全、任意模型資料、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、原版牆狀態、外表面聯集、直立半磚方向與內外角、柵欄門幾何、neutral overlay、虛擬幾何 raycast，以及 WorldEdit／FAWE 的 proxy、mask、history、磁碟 clipboard、非同步 clipboard generation、旋轉、schematic 和批次寫入。協定已升級為 v6；Paper 與 Fabric 必須一起更新至 0.5.0。
 
 ## 已知限制與下一步
 
@@ -207,7 +219,7 @@ shape-only mask 會匹配該形狀的所有材質；指定欄位時只比較指�
 - 水浸狀態已納入協定，但尚未繪製額外水體。
 - `model` 支援原版 JSON baked model；告示牌文字、旗幟圖案、箱子／床等 block-entity 動態 renderer 內容不屬於 baked model，目前只會顯示其可取得的靜態模型部分。
 - 沒有 Fabric 模組的玩家無法看到特殊方塊，這是無資源包方案的必要取捨。
-- Axiom 原生工具只認得實際世界的原版方塊；虛擬方塊請使用整合提供的 `VanillaShape` 工具。
+- Axiom 內建 clipboard 只序列化真實原版 BlockState，公開 API 沒有第三方 clipboard payload hook；虛擬方塊請使用整合提供的 `VanillaShape Clipboard` 工具。它目前不會與同一選區的原版方塊混成單一剪貼簿，也不會進入 Axiom 內建 undo stack。
 - WorldEdit／FAWE 的一般選區命令已支援；只直接枚舉 Minecraft 原生 `BlockType.REGISTRY`、完全不使用 WorldEdit parser 的第三方 GUI 仍看不到虛擬 ID。
 
 ## 授權

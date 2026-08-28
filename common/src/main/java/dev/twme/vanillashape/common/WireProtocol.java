@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 /** Versioned Paper plugin-message payload shared with the Fabric client. */
 public final class WireProtocol {
     public static final String CHANNEL = "vanillashape:sync";
-    public static final int VERSION = 5;
+    public static final int VERSION = 6;
     public static final byte HELLO = 1;
     public static final byte RESET = 2;
     public static final byte UPSERT = 3;
@@ -24,6 +24,8 @@ public final class WireProtocol {
     public static final byte AXIOM_DELETE = 11;
     public static final byte BREAK_BLOCK = 12;
     public static final byte INTERACT_BLOCK = 13;
+    public static final byte AXIOM_COPY = 14;
+    public static final byte AXIOM_PASTE = 15;
 
     private WireProtocol() {}
 
@@ -67,6 +69,16 @@ public final class WireProtocol {
     public static byte[] interactBlock(final int x, final int y, final int z) {
         return coordinate(INTERACT_BLOCK, x, y, z, false);
     }
+    public static byte[] axiomCopy(final int minX, final int minY, final int minZ,
+                                   final int maxX, final int maxY, final int maxZ) {
+        return packet(AXIOM_COPY, out -> {
+            out.writeInt(minX); out.writeInt(minY); out.writeInt(minZ);
+            out.writeInt(maxX); out.writeInt(maxY); out.writeInt(maxZ);
+        });
+    }
+    public static byte[] axiomPaste(final int x, final int y, final int z) {
+        return coordinate(AXIOM_PASTE, x, y, z, false);
+    }
 
     public static Decoded decode(final byte[] bytes) throws IOException {
         try (var in = new DataInputStream(new ByteArrayInputStream(bytes))) {
@@ -79,15 +91,19 @@ public final class WireProtocol {
                 case UPSERT -> {
                     final SpecialBlock block = readBlock(in);
                     yield new Decoded(action, block.world(), block, block.x(), block.y(), block.z(),
-                            false, null, 0, 0, 0);
+                            false, null, 0, 0, 0, 0, 0, 0);
                 }
                 case REMOVE -> new Decoded(action, readString(in), null,
-                        in.readInt(), in.readInt(), in.readInt(), false, null, 0, 0, 0);
+                        in.readInt(), in.readInt(), in.readInt(), false, null, 0, 0, 0,
+                        0, 0, 0);
                 case DEBUG_SELECT, DEBUG_CYCLE, PICK_ITEM, BREAK_BLOCK, INTERACT_BLOCK,
-                        AXIOM_REPLACE, AXIOM_DELETE -> new Decoded(
+                        AXIOM_REPLACE, AXIOM_DELETE, AXIOM_PASTE -> new Decoded(
                         action, null, null, in.readInt(), in.readInt(), in.readInt(), in.readBoolean(),
-                        null, 0, 0, 0);
+                        null, 0, 0, 0, 0, 0, 0);
                 case PLACE_ITEM, AXIOM_PLACE -> readPlacement(action, in);
+                case AXIOM_COPY -> new Decoded(action, null, null,
+                        in.readInt(), in.readInt(), in.readInt(), false, null, 0, 0, 0,
+                        in.readInt(), in.readInt(), in.readInt());
                 default -> throw new IOException("Unknown action " + action);
             };
             if (in.available() != 0) throw new IOException("Trailing bytes after action " + action);
@@ -96,7 +112,8 @@ public final class WireProtocol {
     }
 
     private static Decoded empty(final byte action, final String world) {
-        return new Decoded(action, world, null, 0, 0, 0, false, null, 0, 0, 0);
+        return new Decoded(action, world, null, 0, 0, 0, false, null, 0, 0, 0,
+                0, 0, 0);
     }
 
     private static byte[] coordinate(
@@ -127,7 +144,8 @@ public final class WireProtocol {
         } catch (final IllegalArgumentException invalid) {
             throw new IOException(invalid.getMessage(), invalid);
         }
-        return new Decoded(action, null, null, x, y, z, false, face, hitX, hitY, hitZ);
+        return new Decoded(action, null, null, x, y, z, false, face, hitX, hitY, hitZ,
+                0, 0, 0);
     }
 
     private static void validateHit(final float hitX, final float hitY, final float hitZ) {
@@ -199,5 +217,5 @@ public final class WireProtocol {
 
     public record Decoded(
             byte action, String world, SpecialBlock block, int x, int y, int z, boolean reverse,
-            PlacementFace face, float hitX, float hitY, float hitZ) {}
+            PlacementFace face, float hitX, float hitY, float hitZ, int x2, int y2, int z2) {}
 }

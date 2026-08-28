@@ -1,6 +1,6 @@
 # WorldEdit / FastAsyncWorldEdit 整合
 
-實作版本：VanillaShape 0.4.2（2026-08-28）。目前以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
+實作版本：VanillaShape 0.5.0（2026-08-28）。目前以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
 
 ## 使用方式
 
@@ -63,7 +63,7 @@ Backing world 始終保持空氣。若操作把一般方塊寫到同一格，該
 1. `VanillaShapeBlockParser` 將 `vanillashape:*` 字串轉成原版形狀 proxy 加 VanillaShape NBT，並提供 suggestions。
 2. `VanillaShapeMaskParser` 直接查詢 `BlockService`，使 shape-only 與精確狀態 mask 不受 backing air 影響；FAWE 另以 `AliasedParser` 接上 rich-mask 路由。
 3. `VanillaShapeExtent` 在 `BEFORE_CHANGE`／`BEFORE_HISTORY` 暴露、攔截 proxy；寫入普通方塊時刪除虛擬記錄，寫入 proxy 時把 backing world 改回 air。
-4. `VanillaShapeClipboard` 保留 copy/cut 與 schematic 的 proxy NBT。FAWE 會隱藏非容器 carrier 的 tile NBT，因此載入後會從其 tile map 復原 marker；copy 完成後即使 FAWE 重用同一個 clipboard holder，也會重新包裝 snapshot，讓後續 paste 保留 VanillaShape 狀態。`VanillaShapeClipboardHolder` 會接管 FAWE 磁碟 clipboard 的生命週期，避免 holder 替換時提前 unmap，並在 clipboard 真正清除時釋放資源。
+4. `VanillaShapeClipboard` 保留 copy/cut 與 schematic 的 proxy NBT。FAWE 會隱藏非容器 carrier 的 tile NBT，因此載入後會從其 tile map 復原 marker。FAWE 的複製命令是非同步的；監看器會保存命令前的 holder／clipboard 身分與 session generation，只在本次命令完成並建立不同的新 clipboard 後包裝 snapshot。`VanillaShapeClipboardHolder` 會接管 FAWE 磁碟 clipboard 的生命週期，避免 holder 替換時提前 unmap，並在 clipboard 真正清除時釋放資源。
 
 Proxy NBT 的核心欄位：
 
@@ -97,7 +97,7 @@ proxy 只存在於 parser、extent、history、clipboard 與 schematic 中，不
 
 FAWE 啟用時，VanillaShape 會在執行期將精確的 extent 類名加入 `Settings.EXTENT.ALLOWED_PLUGINS`，停用時移除。FAWE 的 `HISTORY.COMBINE_STAGES` 會在記憶體中暫時關閉，確保 state 與 NBT 不會被拆散；插件停用時恢復原值，不會改寫 FAWE 設定檔。
 
-每個 extent 累積座標變更，commit 時呼叫 `BlockRepository.applyBatch`。SQLite connection、世界快取與 mutation 都有同步邊界；Fabric 的增量訊息若由 FAWE worker 觸發，會合併成一個主執行緒 task 廣播。
+每個 extent 累積座標變更，commit 時呼叫 `BlockRepository.applyBatch`。SQLite connection、世界快取與 mutation 都有同步邊界；Fabric 的增量訊息若由 FAWE worker 觸發，會合併成一個主執行緒 task 廣播。clipboard 監看最長為 60 秒；較新的 copy/load 指令會使較舊 generation 失效，避免交錯完成時把錯誤選區資料附到較新的 clipboard。
 
 ## ItemsAdder-WorldEdit 1.1.3 研究來源
 

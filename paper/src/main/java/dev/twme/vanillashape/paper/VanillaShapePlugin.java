@@ -33,6 +33,7 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
     private PlacementService placements;
     private DebugStickService debugStick;
     private InteractionService interactions;
+    private AxiomClipboardService axiomClipboard;
     private WorldEditIntegration worldEdit;
 
     @Override public void onEnable() {
@@ -44,6 +45,7 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
             placements = new PlacementService(blocks);
             debugStick = new DebugStickService(blocks);
             interactions = new InteractionService(this, blocks, shapeItems);
+            axiomClipboard = new AxiomClipboardService(blocks);
         } catch (final Exception error) {
             getLogger().log(Level.SEVERE, "Could not open VanillaShape block database", error);
             Bukkit.getPluginManager().disablePlugin(this);
@@ -161,6 +163,15 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
                 validateWorldPosition(player, request.x(), request.y(), request.z());
                 blocks.removeStructure(requireTarget(player, request.x(), request.y(), request.z()));
             }
+            case WireProtocol.AXIOM_COPY -> {
+                requireAxiom(player, false);
+                axiomClipboard.copy(player, request.x(), request.y(), request.z(),
+                        request.x2(), request.y2(), request.z2());
+            }
+            case WireProtocol.AXIOM_PASTE -> {
+                requireAxiom(player, true);
+                axiomClipboard.paste(player, request.x(), request.y(), request.z());
+            }
             default -> { }
         }
     }
@@ -197,6 +208,7 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
 
     @EventHandler public void onQuit(final PlayerQuitEvent event) {
         interactions.forget(event.getPlayer());
+        axiomClipboard.forget(event.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

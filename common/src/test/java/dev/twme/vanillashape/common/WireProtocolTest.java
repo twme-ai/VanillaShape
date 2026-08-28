@@ -56,6 +56,16 @@ class WireProtocolTest {
         assertEquals(-8, broken.x());
         assertEquals(12, broken.y());
         assertEquals(45, broken.z());
+
+        final WireProtocol.Decoded copy = WireProtocol.decode(WireProtocol.axiomCopy(
+                -20, -64, 4, 30, 319, 99));
+        assertEquals(WireProtocol.AXIOM_COPY, copy.action());
+        assertEquals(-20, copy.x());
+        assertEquals(99, copy.z2());
+
+        final WireProtocol.Decoded paste = WireProtocol.decode(WireProtocol.axiomPaste(8, 70, -5));
+        assertEquals(WireProtocol.AXIOM_PASTE, paste.action());
+        assertEquals(70, paste.y());
     }
 
     @Test void rejectsOutOfRangePlacementHit() {

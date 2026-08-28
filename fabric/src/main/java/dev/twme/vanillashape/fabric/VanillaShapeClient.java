@@ -40,7 +40,7 @@ public final class VanillaShapeClient implements ClientModInitializer {
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> blocks.clear());
         LevelRenderEvents.COLLECT_SUBMITS.register(renderer::render);
         if (FabricLoader.getInstance().isModLoaded("axiom")) {
-            ClientLifecycleEvents.CLIENT_STARTED.register(client -> AxiomIntegration.initialize(LOGGER));
+            ClientLifecycleEvents.CLIENT_STARTED.register(client -> AxiomIntegration.initialize(LOGGER, blocks));
         }
         LOGGER.info("VanillaShape client renderer initialized (no resource pack required).");
     }

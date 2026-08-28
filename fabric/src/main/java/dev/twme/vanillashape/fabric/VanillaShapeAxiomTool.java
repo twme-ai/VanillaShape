@@ -8,17 +8,12 @@ import com.moulberry.axiomclientapi.service.RegionProvider;
 import com.moulberry.axiomclientapi.service.ToolService;
 import dev.twme.vanillashape.common.PlacementFace;
 import dev.twme.vanillashape.common.WireProtocol;
-import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
-import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ServiceLoader;
 
 /** Official AxiomClientAPI tool for placing, replacing and deleting virtual blocks. */
 final class VanillaShapeAxiomTool implements CustomTool {
-    private record PlacementTarget(BlockPos position, BlockPos support,
-                                   net.minecraft.core.Direction face, Vec3 hit) {}
     private final ToolService tools = service(ToolService.class);
     private final BooleanRegion preview = service(RegionProvider.class).createBoolean();
 
@@ -31,14 +26,14 @@ final class VanillaShapeAxiomTool implements CustomTool {
     }
 
     @Override public boolean callUseTool() {
-        final PlacementTarget target = placementTarget();
+        final AxiomTargeting.Placement target = AxiomTargeting.placement(tools);
         if (target != null) {
             ClientInteractionHandler.send(WireProtocol.axiomPlace(
                     target.position().getX(), target.position().getY(), target.position().getZ(),
-                    PlacementFace.valueOf(target.face().name()),
-                    ClientInteractionHandler.local(target.hit().x - target.support().getX()),
-                    ClientInteractionHandler.local(target.hit().y - target.support().getY()),
-                    ClientInteractionHandler.local(target.hit().z - target.support().getZ())));
+                    PlacementFace.valueOf(target.surface().face().name()),
+                    ClientInteractionHandler.local(target.surface().hit().x - target.surface().support().getX()),
+                    ClientInteractionHandler.local(target.surface().hit().y - target.surface().support().getY()),
+                    ClientInteractionHandler.local(target.surface().hit().z - target.surface().support().getZ())));
         }
         return true;
     }
@@ -63,27 +58,20 @@ final class VanillaShapeAxiomTool implements CustomTool {
 
     @Override public void render(final IAxiomWorldRenderContext context) {
         preview.clear();
-        final PlacementTarget target = placementTarget();
+        final AxiomTargeting.Placement target = AxiomTargeting.placement(tools);
         if (target == null) return;
         preview.add(target.position().getX(), target.position().getY(), target.position().getZ());
         preview.render(context, Vec3.ZERO, Effects.SELECTION);
     }
 
-    private PlacementTarget placementTarget() {
-        final ClientBlockStore.Hit custom = customTarget();
-        if (custom != null) {
-            final BlockPos support = new BlockPos(custom.block().x(), custom.block().y(), custom.block().z());
-            return new PlacementTarget(support.relative(custom.face()), support,
-                    custom.face(), custom.location());
-        }
-        final BlockHitResult vanilla = tools.raycastBlock();
-        return vanilla == null ? null : new PlacementTarget(
-                vanilla.getBlockPos().relative(vanilla.getDirection()), vanilla.getBlockPos(),
-                vanilla.getDirection(), vanilla.getLocation());
-    }
-
-    private static ClientBlockStore.Hit customTarget() {
-        return ClientInteractionHandler.hit(Minecraft.getInstance(), 512);
+    private ClientBlockStore.Hit customTarget() {
+        final AxiomTargeting.Surface surface = AxiomTargeting.surface(tools);
+        if (surface == null) return null;
+        final var client = net.minecraft.client.Minecraft.getInstance();
+        final ClientBlockStore.Hit custom = ClientInteractionHandler.hit(client, 512);
+        return custom != null && custom.block().x() == surface.support().getX()
+                && custom.block().y() == surface.support().getY()
+                && custom.block().z() == surface.support().getZ() ? custom : null;
     }
 
     private static <T> T service(final Class<T> type) {

@@ -9,12 +9,13 @@ import java.util.ServiceLoader;
 final class AxiomIntegration {
     private AxiomIntegration() {}
 
-    static void initialize(final Logger logger) {
+    static void initialize(final Logger logger, final ClientBlockStore blocks) {
         try {
             final ToolRegistryService registry = ServiceLoader.load(ToolRegistryService.class).findFirst()
                     .orElseThrow(() -> new IllegalStateException("Axiom ToolRegistryService is unavailable"));
             registry.register(new VanillaShapeAxiomTool());
-            logger.info("Registered the VanillaShape tool in Axiom Editor.");
+            registry.register(new VanillaShapeAxiomClipboardTool(blocks));
+            logger.info("Registered the VanillaShape edit and clipboard tools in Axiom Editor.");
         } catch (final Throwable error) {
             logger.warn("Axiom is installed, but its VanillaShape tool could not be registered", error);
         }
