@@ -66,6 +66,12 @@ class WireProtocolTest {
         final WireProtocol.Decoded paste = WireProtocol.decode(WireProtocol.axiomPaste(8, 70, -5));
         assertEquals(WireProtocol.AXIOM_PASTE, paste.action());
         assertEquals(70, paste.y());
+
+        final WireProtocol.Decoded tool = WireProtocol.decode(WireProtocol.editorRightClick(
+                4, 81, -9, PlacementFace.WEST, .25f, .75f, 1));
+        assertEquals(WireProtocol.EDITOR_RIGHT_CLICK, tool.action());
+        assertEquals(PlacementFace.WEST, tool.face());
+        assertEquals(.75f, tool.hitY());
     }
 
     @Test void rejectsOutOfRangePlacementHit() {

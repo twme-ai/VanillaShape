@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 /** Versioned Paper plugin-message payload shared with the Fabric client. */
 public final class WireProtocol {
     public static final String CHANNEL = "vanillashape:sync";
-    public static final int VERSION = 6;
+    public static final int VERSION = 7;
     public static final byte HELLO = 1;
     public static final byte RESET = 2;
     public static final byte UPSERT = 3;
@@ -26,6 +26,8 @@ public final class WireProtocol {
     public static final byte INTERACT_BLOCK = 13;
     public static final byte AXIOM_COPY = 14;
     public static final byte AXIOM_PASTE = 15;
+    public static final byte EDITOR_LEFT_CLICK = 16;
+    public static final byte EDITOR_RIGHT_CLICK = 17;
 
     private WireProtocol() {}
 
@@ -79,6 +81,16 @@ public final class WireProtocol {
     public static byte[] axiomPaste(final int x, final int y, final int z) {
         return coordinate(AXIOM_PASTE, x, y, z, false);
     }
+    public static byte[] editorLeftClick(final int x, final int y, final int z,
+                                         final PlacementFace face,
+                                         final float hitX, final float hitY, final float hitZ) {
+        return placement(EDITOR_LEFT_CLICK, x, y, z, face, hitX, hitY, hitZ);
+    }
+    public static byte[] editorRightClick(final int x, final int y, final int z,
+                                          final PlacementFace face,
+                                          final float hitX, final float hitY, final float hitZ) {
+        return placement(EDITOR_RIGHT_CLICK, x, y, z, face, hitX, hitY, hitZ);
+    }
 
     public static Decoded decode(final byte[] bytes) throws IOException {
         try (var in = new DataInputStream(new ByteArrayInputStream(bytes))) {
@@ -100,7 +112,8 @@ public final class WireProtocol {
                         AXIOM_REPLACE, AXIOM_DELETE, AXIOM_PASTE -> new Decoded(
                         action, null, null, in.readInt(), in.readInt(), in.readInt(), in.readBoolean(),
                         null, 0, 0, 0, 0, 0, 0);
-                case PLACE_ITEM, AXIOM_PLACE -> readPlacement(action, in);
+                case PLACE_ITEM, AXIOM_PLACE, EDITOR_LEFT_CLICK, EDITOR_RIGHT_CLICK ->
+                        readPlacement(action, in);
                 case AXIOM_COPY -> new Decoded(action, null, null,
                         in.readInt(), in.readInt(), in.readInt(), false, null, 0, 0, 0,
                         in.readInt(), in.readInt(), in.readInt());

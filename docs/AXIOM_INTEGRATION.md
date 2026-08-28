@@ -1,6 +1,6 @@
 # Axiom 整合
 
-實作版本：VanillaShape 0.5.0（2026-08-28）。研究基準為 Axiom 5.5.0 內附的 AxiomClientAPI 2.0.1，以及 AxiomPaperPlugin 26.2 原始碼。
+實作版本：VanillaShape 0.6.0（2026-08-28）。研究基準為 Axiom 5.5.0 內附的 AxiomClientAPI 2.0.1，以及 AxiomPaperPlugin 26.2 原始碼。
 
 ## 公開 API 邊界
 
@@ -8,7 +8,7 @@ AxiomClientAPI 的 `CustomTool` 只提供工具啟用期間的 right-click、con
 
 AxiomPaper 的 custom-block registry 也不能直接表示 VanillaShape。該 API 將每個 custom state 映射到一個唯一、已存在的 Minecraft `BlockState`，並拒絕兩個 custom state 共用 carrier。VanillaShape 的資料是每個座標上任意的 `shape × material BlockData × model BlockData × flags`，且 backing world 必須保持空氣；使用有限的原版 state palette 會遺失資料或把 carrier 留在世界。
 
-因此 0.5.0 不依賴 Axiom 5.5.0 的閉源內部 `Selection`／`Clipboard` 類別，也不修改使用者的 Axiom JAR。整合只使用官方公開 API，另外提供一個 `VanillaShape Clipboard` CustomTool。
+因此 0.6.0 不依賴 Axiom 5.5.0 的閉源內部 `Selection`／`Clipboard` 類別，也不修改使用者的 Axiom JAR。整合只使用官方公開 API，另外提供一個 `VanillaShape Clipboard` CustomTool。
 
 研究來源：
 

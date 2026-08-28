@@ -1,6 +1,6 @@
 # WorldEdit / FastAsyncWorldEdit 整合
 
-實作版本：VanillaShape 0.5.0（2026-08-28）。目前以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
+實作版本：VanillaShape 0.6.0（2026-08-28）。目前以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
 
 ## 使用方式
 
@@ -51,6 +51,7 @@ shape-only mask 會匹配該 shape 的任何材質與狀態；帶狀態的 mask 
 - `//rotate`／`//flip` 透過可轉換的原版 proxy state 改變 facing、half、corner、hinge 與連接方向。
 - Sponge v3 schematic save/load round-trip。
 - FAWE 背景執行緒與 bulk overload；一次 EditSession 以單一 SQLite transaction 提交，不會每格排一個 Bukkit task。
+- 對虛擬方塊使用選區棒、遠距選區棒、replacer、cycler、stacker、query、brush、navigation、super-pickaxe，以及其他實作 WorldEdit block/trace tool 介面的工具。
 
 Backing world 始終保持空氣。若操作把一般方塊寫到同一格，該一般方塊才會真正進入 Paper 世界。
 
@@ -58,12 +59,14 @@ Backing world 始終保持空氣。若操作把一般方塊寫到同一格，該
 
 ## 實作架構
 
-整合由四層構成：
+整合由六層構成：
 
 1. `VanillaShapeBlockParser` 將 `vanillashape:*` 字串轉成原版形狀 proxy 加 VanillaShape NBT，並提供 suggestions。
 2. `VanillaShapeMaskParser` 直接查詢 `BlockService`，使 shape-only 與精確狀態 mask 不受 backing air 影響；FAWE 另以 `AliasedParser` 接上 rich-mask 路由。
 3. `VanillaShapeExtent` 在 `BEFORE_CHANGE`／`BEFORE_HISTORY` 暴露、攔截 proxy；寫入普通方塊時刪除虛擬記錄，寫入 proxy 時把 backing world 改回 air。
-4. `VanillaShapeClipboard` 保留 copy/cut 與 schematic 的 proxy NBT。FAWE 會隱藏非容器 carrier 的 tile NBT，因此載入後會從其 tile map 復原 marker。FAWE 的複製命令是非同步的；監看器會保存命令前的 holder／clipboard 身分與 session generation，只在本次命令完成並建立不同的新 clipboard 後包裝 snapshot。`VanillaShapeClipboardHolder` 會接管 FAWE 磁碟 clipboard 的生命週期，避免 holder 替換時提前 unmap，並在 clipboard 真正清除時釋放資源。
+4. `VanillaShapeClipboard` 保留 copy/cut 與 schematic 的 proxy NBT。FAWE 會隱藏非容器 carrier 的 tile NBT，因此載入後會從其 tile map 復原 marker。Bukkit 的 `PlayerCommandPreprocessEvent` 在 WorldEdit fallback listener 執行前保存選區；監看器只在本次命令建立不同的新 clipboard 後包裝 snapshot，`//paste`／`//place` 則在命令消費 clipboard 前做同步補救。`VanillaShapeClipboardHolder` 會接管 FAWE 磁碟 clipboard 的生命週期，避免 holder 替換時提前 unmap，並在 clipboard 真正清除時釋放資源。
+5. Fabric 對空氣 backing 執行自己的精確幾何 raycast，並以原版 block outline raycast 遮擋遠處目標，再將虛擬方塊、命中面與局部命中位置送至 Paper。一般 block tool 維持 10 格伺服器驗證；有權限且已綁定的 trace tool 最遠可使用 512 格候選目標。
+6. 射線型工具需要從 Bukkit 世界 trace 時，`VirtualTargetPlayer` 只代理 `getBlockTrace*`／`getSolidBlockTrace` 的結果，其餘 actor、session、permission 與 FAWE async queue 行為仍使用原始 WorldEdit player。代理會檢查工具實際傳入的 range；超出 brush／far-wand 自身設定時回傳無命中。相同工具、相同虛擬座標與命中面的快速重複右鍵會被去抖；工具身分也是 key 的一部分，因此切換工具不會誤吞第一次操作。
 
 Proxy NBT 的核心欄位：
 
@@ -97,7 +100,7 @@ proxy 只存在於 parser、extent、history、clipboard 與 schematic 中，不
 
 FAWE 啟用時，VanillaShape 會在執行期將精確的 extent 類名加入 `Settings.EXTENT.ALLOWED_PLUGINS`，停用時移除。FAWE 的 `HISTORY.COMBINE_STAGES` 會在記憶體中暫時關閉，確保 state 與 NBT 不會被拆散；插件停用時恢復原值，不會改寫 FAWE 設定檔。
 
-每個 extent 累積座標變更，commit 時呼叫 `BlockRepository.applyBatch`。SQLite connection、世界快取與 mutation 都有同步邊界；Fabric 的增量訊息若由 FAWE worker 觸發，會合併成一個主執行緒 task 廣播。clipboard 監看最長為 60 秒；較新的 copy/load 指令會使較舊 generation 失效，避免交錯完成時把錯誤選區資料附到較新的 clipboard。
+每個 extent 累積座標變更，commit 時呼叫 `BlockRepository.applyBatch`。SQLite connection、世界快取與 mutation 都有同步邊界；Fabric 的增量訊息若由 FAWE worker 觸發，會合併成一個主執行緒 task 廣播。clipboard 監看最長為 60 秒；較新的 copy/load 指令會使較舊 generation 失效，避免交錯完成時把錯誤選區資料附到較新的 clipboard。FAWE 工具仍透過其 actor keyed async queue 執行，不會從 plugin-message thread 直接改動 EditSession。
 
 ## ItemsAdder-WorldEdit 1.1.3 研究來源
 
@@ -111,11 +114,13 @@ FAWE 啟用時，VanillaShape 會在執行期將精確的 extent 類名加入 `S
 
 研究依據：
 
-- [WorldEdit 原始碼](https://github.com/EngineHub/WorldEdit)
+- [WorldEdit fallback command listener](https://github.com/EngineHub/WorldEdit/blob/version/7.4.x/worldedit-bukkit/src/main/java/com/sk89q/bukkit/util/FallbackRegistrationListener.java)
+- [WorldEdit Bukkit 點擊分派](https://github.com/EngineHub/WorldEdit/blob/version/7.4.x/worldedit-bukkit/src/main/java/com/sk89q/worldedit/bukkit/WorldEditListener.java)
 - [WorldEdit EditSession / extent 文件](https://worldedit.enginehub.org/en/latest/api/concepts/edit-sessions/)
-- [FastAsyncWorldEdit 原始碼](https://github.com/IntellectualSites/FastAsyncWorldEdit)
+- [FAWE 2.15.4 block/trace tool 分派](https://github.com/IntellectualSites/FastAsyncWorldEdit/blob/2.15.4/worldedit-core/src/main/java/com/sk89q/worldedit/extension/platform/PlatformManager.java)
+- [FAWE 2.15.4 clipboard commands](https://github.com/IntellectualSites/FastAsyncWorldEdit/blob/2.15.4/worldedit-core/src/main/java/com/sk89q/worldedit/command/ClipboardCommands.java)
 - [FAWE API 使用文件](https://github.com/IntellectualSites/documentation/blob/main/fastasyncworldedit/API/api-usage.md)
 
 ## 驗證
 
-在乾淨 Paper 26.2 測試伺服器分別載入 WorldEdit 7.4.5 與 FAWE 2.15.4，驗證：parser、shape/exact mask、replace、普通方塊覆寫、undo/redo、copy/paste、90 度旋轉、Sponge v3 schematic round-trip，以及 backing air。FAWE 額外從背景執行緒建立及清除 1,000 格精確狀態，確認批次提交與 client broadcast 不需要從 worker 直接呼叫 Bukkit world API。
+在乾淨 Paper 26.2 測試伺服器分別載入 WorldEdit 7.4.5 與 FAWE 2.15.4，驗證：parser、shape/exact mask、replace、普通方塊覆寫、undo/redo、90 度旋轉、Sponge v3 schematic round-trip，以及 backing air。另以模擬真實 Bukkit 玩家依序觸發 `PlayerCommandPreprocessEvent` 與兩套插件自己的 command manager，驗證 `//copy` 完成後同 tick 立即 `//paste`，目的座標仍是 VanillaShape 記錄且底層為空氣；同一測試也涵蓋 selection wand 的左右鍵與強制命中虛擬座標的 trace tool。FAWE 額外從背景執行緒建立及清除 1,000 格精確狀態，確認批次提交與 client broadcast 不需要從 worker 直接呼叫 Bukkit world API。

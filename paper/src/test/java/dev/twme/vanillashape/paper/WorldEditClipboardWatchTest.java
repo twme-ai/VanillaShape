@@ -5,9 +5,14 @@ import com.sk89q.worldedit.extent.clipboard.Clipboard;
 import com.sk89q.worldedit.math.BlockVector3;
 import com.sk89q.worldedit.regions.CuboidRegion;
 import com.sk89q.worldedit.session.ClipboardHolder;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorldEditClipboardWatchTest {
@@ -26,6 +31,15 @@ class WorldEditClipboardWatchTest {
     @Test void acceptsFirstClipboardWhenSessionWasInitiallyEmpty() {
         assertFalse(WorldEditIntegration.newClipboard(null, null));
         assertTrue(WorldEditIntegration.newClipboard(null, new ClipboardHolder(clipboard(2))));
+    }
+
+    @Test void capturesCommandsBeforeWorldEditFallbackCancelsTheEvent() throws Exception {
+        final EventHandler handler = WorldEditIntegration.class
+                .getMethod("onWorldEditCommand", PlayerCommandPreprocessEvent.class)
+                .getAnnotation(EventHandler.class);
+        assertNotNull(handler);
+        assertEquals(EventPriority.LOWEST, handler.priority());
+        assertFalse(handler.ignoreCancelled());
     }
 
     private static Clipboard clipboard(final int x) {

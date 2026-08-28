@@ -23,7 +23,7 @@ VanillaShape 是一套配對使用的 **PaperMC 插件 + Fabric 客戶端模組*
 - 門、地板門、柵欄門及通用模型中的門／按鈕／拉桿／可點燃狀態可以右鍵互動；按鈕會自動復位。
 - `/vshape replacemode` 可切換右鍵材質替換模式，保留目標形狀與狀態，只套用主手方塊材質。
 - 安裝 Axiom 時會透過官方 AxiomClientAPI 加入 `VanillaShape` 與 `VanillaShape Clipboard` Editor 工具；可放置、替換、刪除、兩角選取、複製與批次貼上特殊方塊。
-- 可選整合 WorldEdit 7.4.5 或 FastAsyncWorldEdit 2.15.4：九種 `vanillashape:*` 方塊會進入參數補全，並支援 set、replace、mask、copy/cut/paste、旋轉／鏡像、Sponge v3 schematic 與 undo/redo。
+- 可選整合 WorldEdit 7.4.5 或 FastAsyncWorldEdit 2.15.4：九種 `vanillashape:*` 方塊會進入參數補全，並支援 set、replace、mask、copy/cut/paste、旋轉／鏡像、Sponge v3 schematic、undo/redo，以及對虛擬方塊使用各種物品綁定工具。
 - 直立半磚使用與原版樓梯一致的相對狀態：`straight`、`inner_left`、`inner_right`、`outer_left`、`outer_right`。Paper 會在相鄰方塊變更時重新計算狀態。
 - 直立半磚貼在側面時會靠向被點擊的支撐方塊；點擊頂面或底面時依命中位置選擇東／西／南／北半，中央位置則依玩家朝向決定。放置後會像樓梯一樣自動形成內外角。
 - 依需求，目前特殊方塊只有顯示效果，**沒有伺服器碰撞箱**；Paper 世界中的對應位置保持空氣。
@@ -46,8 +46,8 @@ flowchart LR
 
 ## 安裝
 
-1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.5.0.jar`。
-2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.5.0.jar`。
+1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.6.0.jar`。
+2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.6.0.jar`。
 3. 啟動伺服器。資料庫會建立於 `plugins/VanillaShape/blocks.db`。
 
 若同時使用 Axiom：
@@ -196,7 +196,9 @@ FAWE 的 rich parser 會把材質 BlockData 的 `[]` 當成自己的語法，因
 
 shape-only mask 會匹配該形狀的所有材質；指定欄位時只比較指定欄位。寫入經單一 SQLite transaction 批次提交，世界中的 backing block 仍是空氣。`//undo`／`//redo`、一般 `//copy`／`//cut`／`//paste`、`//rotate`／`//flip` 和 Sponge v3 schematic 會保存完整狀態。技術原理、ItemsAdder-WorldEdit 拆包比較與已驗證範圍見 [`docs/WORLDEDIT_FAWE_INTEGRATION.md`](docs/WORLDEDIT_FAWE_INTEGRATION.md)。
 
-FAWE 的 copy 會在背景完成。VanillaShape 會記住命令前的 clipboard，並用每個 session 的 generation 等待本次命令真正建立的新 clipboard 後才附加 proxy NBT；連續執行複製也不會把舊 snapshot 包到新結果。這避免 oak stairs／wall 等只應存在於 clipboard 的 carrier 被真正貼進伺服器世界。
+FAWE 的 copy 會在背景完成。VanillaShape 會在 WorldEdit 的 fallback command listener 執行前保存本次選區及舊 clipboard，等待新 clipboard 後附加 proxy NBT；若玩家在同一 tick 立即 `//paste`，貼上前也會同步修補已完成的 clipboard。連續執行複製不會把舊 snapshot 包到新結果，proxy carrier 只存在於 clipboard，貼入世界後仍是 VanillaShape 記錄與 backing air。
+
+Fabric 會把虛擬方塊的精確命中座標送到 Paper，再交給目前綁定的 WorldEdit／FAWE 工具。選區棒、遠距選區棒、replacer、cycler、stacker、query、brush、navigation 與 super-pickaxe 等 block/trace 工具因此都能像點擊原版方塊一樣命中 VanillaShape。trace raycast 最遠 512 格且仍尊重工具本身要求的 range；一般 block tool 與 VanillaShape 操作維持 10 格伺服器驗證。相同工具對相同目標面送出的重複右鍵封包會被去抖，但切換工具不會誤吞第一次點擊。沒有適用工具時，才回到 VanillaShape 的普通破壞、互動或相鄰放置。
 
 ## 編譯與測試
 
@@ -206,10 +208,10 @@ FAWE 的 copy 會在背景完成。VanillaShape 會記住命令前的 clipboard�
 
 產物：
 
-- Paper：`paper/build/libs/paper-0.5.0.jar`（已內含 relocated SQLite JDBC）
-- Fabric：`fabric/build/libs/fabric-0.5.0.jar`
+- Paper：`paper/build/libs/paper-0.6.0.jar`（已內含 relocated SQLite JDBC）
+- Fabric：`fabric/build/libs/fabric-0.6.0.jar`
 
-測試涵蓋雙向 wire protocol、Axiom 選區／貼上座標安全、任意模型資料、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、原版牆狀態、外表面聯集、直立半磚方向與內外角、柵欄門幾何、neutral overlay、虛擬幾何 raycast，以及 WorldEdit／FAWE 的 proxy、mask、history、磁碟 clipboard、非同步 clipboard generation、旋轉、schematic 和批次寫入。協定已升級為 v6；Paper 與 Fabric 必須一起更新至 0.5.0。
+測試涵蓋雙向 wire protocol、Axiom 選區／貼上座標安全、任意模型資料、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、原版牆狀態、外表面聯集、直立半磚方向與內外角、柵欄門幾何、neutral overlay、虛擬幾何 raycast，以及 WorldEdit／FAWE 的 proxy、mask、history、磁碟 clipboard、真實玩家指令事件、即時貼上修補、虛擬 block/trace 工具、旋轉、schematic 和批次寫入。協定已升級為 v7；Paper 與 Fabric 必須一起更新至 0.6.0。
 
 ## 已知限制與下一步
 

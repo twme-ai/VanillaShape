@@ -134,6 +134,30 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
                 final var target = requireNearTarget(player, request.x(), request.y(), request.z());
                 pick(player, target);
             }
+            case WireProtocol.EDITOR_LEFT_CLICK -> {
+                final var target = requireTarget(player, request.x(), request.y(), request.z());
+                if (worldEdit != null && worldEdit.handleToolClick(
+                        player, target, request.face(), true)) break;
+                requireNear(player, request.x(), request.y(), request.z());
+                requirePermission(player, "vanillashape.break");
+                breakBlock(player, target);
+            }
+            case WireProtocol.EDITOR_RIGHT_CLICK -> {
+                final var target = requireTarget(player, request.x(), request.y(), request.z());
+                if (worldEdit != null && worldEdit.handleToolClick(
+                        player, target, request.face(), false)) break;
+                requireNear(player, request.x(), request.y(), request.z());
+                requirePermission(player, "vanillashape.use");
+                if (shapeItems.read(player.getInventory().getItemInMainHand()).isPresent()
+                        && !interactions.replacementMode(player)) {
+                    final int[] position = adjacentPosition(
+                            request.x(), request.y(), request.z(), request.face());
+                    placeHeld(player, position[0], position[1], position[2], true,
+                            request.face(), request.hitX(), request.hitY(), request.hitZ());
+                } else {
+                    interactions.interact(player, target);
+                }
+            }
             case WireProtocol.BREAK_BLOCK -> {
                 requirePermission(player, "vanillashape.break");
                 final var target = requireNearTarget(player, request.x(), request.y(), request.z());
@@ -342,6 +366,18 @@ public final class VanillaShapePlugin extends JavaPlugin implements Listener, Pl
             case WEST -> new int[] {x + 1, y, z};
             case UP -> new int[] {x, y - 1, z};
             case DOWN -> new int[] {x, y + 1, z};
+        };
+    }
+
+    private static int[] adjacentPosition(final int x, final int y, final int z,
+                                          final PlacementFace face) {
+        return switch (face) {
+            case NORTH -> new int[] {x, y, z - 1};
+            case EAST -> new int[] {x + 1, y, z};
+            case SOUTH -> new int[] {x, y, z + 1};
+            case WEST -> new int[] {x - 1, y, z};
+            case UP -> new int[] {x, y + 1, z};
+            case DOWN -> new int[] {x, y - 1, z};
         };
     }
 

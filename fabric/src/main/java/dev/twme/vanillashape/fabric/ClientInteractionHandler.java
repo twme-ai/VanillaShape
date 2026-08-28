@@ -4,14 +4,13 @@ import dev.twme.vanillashape.common.PlacementFace;
 import dev.twme.vanillashape.common.WireProtocol;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.HitResult;
 
 public final class ClientInteractionHandler {
+    private static final double EDITOR_TRACE_RANGE = 512;
     private static ClientBlockStore blocks;
 
     private ClientInteractionHandler() {}
@@ -22,38 +21,42 @@ public final class ClientInteractionHandler {
 
     public static boolean attack(final Minecraft client) {
         if (client.player == null) return false;
-        final ClientBlockStore.Hit hit = hit(client, client.player.blockInteractionRange());
+        final ItemStack held = client.player.getMainHandItem();
+        final ClientBlockStore.Hit hit = hit(client, held.is(Items.DEBUG_STICK)
+                ? client.player.blockInteractionRange() : EDITOR_TRACE_RANGE);
         if (hit == null) return false;
-        if (client.player.getMainHandItem().is(Items.DEBUG_STICK)) {
+        if (held.is(Items.DEBUG_STICK)) {
             send(WireProtocol.debugSelect(hit.block().x(), hit.block().y(), hit.block().z(),
                     client.player.isShiftKeyDown()));
         } else {
-            send(WireProtocol.breakBlock(hit.block().x(), hit.block().y(), hit.block().z()));
+            send(WireProtocol.editorLeftClick(hit.block().x(), hit.block().y(), hit.block().z(),
+                    PlacementFace.valueOf(hit.face().name()),
+                    local(hit.location().x - hit.block().x()),
+                    local(hit.location().y - hit.block().y()),
+                    local(hit.location().z - hit.block().z())));
         }
         return true;
     }
 
     public static boolean use(final Minecraft client) {
         if (client.player == null) return false;
-        final ClientBlockStore.Hit hit = hit(client, client.player.blockInteractionRange());
-        if (hit == null) return false;
         final ItemStack held = client.player.getMainHandItem();
+        final ClientBlockStore.Hit hit = hit(client, held.is(Items.DEBUG_STICK)
+                ? client.player.blockInteractionRange() : EDITOR_TRACE_RANGE);
+        if (hit == null) return false;
         if (held.is(Items.DEBUG_STICK)) {
             send(WireProtocol.debugCycle(hit.block().x(), hit.block().y(), hit.block().z(),
                     client.player.isShiftKeyDown()));
             return true;
         }
-        if (isShapeItem(held)) {
-            final BlockPos support = new BlockPos(hit.block().x(), hit.block().y(), hit.block().z());
-            final BlockPos target = support.relative(hit.face());
-            send(WireProtocol.placeItem(target.getX(), target.getY(), target.getZ(),
-                    PlacementFace.valueOf(hit.face().name()),
-                    local(hit.location().x - support.getX()),
-                    local(hit.location().y - support.getY()),
-                    local(hit.location().z - support.getZ())));
-        } else {
-            send(WireProtocol.interactBlock(hit.block().x(), hit.block().y(), hit.block().z()));
-        }
+        // Always let Paper ask WorldEdit first. This also permits tools bound to
+        // the vanilla item underlying a VanillaShape inventory item; Paper falls
+        // back to shape placement or ordinary block interaction when no tool is active.
+        send(WireProtocol.editorRightClick(hit.block().x(), hit.block().y(), hit.block().z(),
+                PlacementFace.valueOf(hit.face().name()),
+                local(hit.location().x - hit.block().x()),
+                local(hit.location().y - hit.block().y()),
+                local(hit.location().z - hit.block().z())));
         return true;
     }
 
@@ -71,17 +74,16 @@ public final class ClientInteractionHandler {
         final var custom = blocks.raycast(world, client.player.getEyePosition(),
                 client.player.getViewVector(1), range);
         if (custom == null) return null;
+        final var start = client.player.getEyePosition();
+        final var end = start.add(client.player.getViewVector(1).normalize().scale(range));
+        final HitResult vanillaBlock = client.level.clip(new ClipContext(start, end,
+                ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, client.player));
+        if (vanillaBlock.getType() != HitResult.Type.MISS
+                && start.distanceToSqr(vanillaBlock.getLocation()) < custom.distanceSquared()) return null;
         if (client.hitResult != null && client.hitResult.getType() != HitResult.Type.MISS
-                && client.player.getEyePosition().distanceToSqr(client.hitResult.getLocation())
+                && start.distanceToSqr(client.hitResult.getLocation())
                 < custom.distanceSquared()) return null;
         return custom;
-    }
-
-    static boolean isShapeItem(final ItemStack item) {
-        final CustomData data = item.get(DataComponents.CUSTOM_DATA);
-        if (data == null) return false;
-        return data.copyTag().getCompoundOrEmpty("PublicBukkitValues")
-                .contains("vanillashape:item_version");
     }
 
     static void send(final byte[] data) {
