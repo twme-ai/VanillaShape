@@ -3,6 +3,14 @@ plugins {
     id 'com.gradleup.shadow'
 }
 
+def targetMinecraft = providers.gradleProperty('paper_minecraft_version').getOrElse('26.2')
+def targetPaperApi = providers.gradleProperty('paper_api_version').getOrElse('26.2.build.121-stable')
+def targetWorldEdit = providers.gradleProperty('worldedit_version').getOrElse('7.4.5')
+def targetJava = targetMinecraft.startsWith('26.') ? 25 : 21
+
+java { toolchain.languageVersion = JavaLanguageVersion.of(targetJava) }
+tasks.withType(JavaCompile).configureEach { options.release = targetJava }
+
 repositories {
     maven { url = 'https://repo.papermc.io/repository/maven-public/' }
     maven { url = 'https://maven.enginehub.org/repo/' }
@@ -15,13 +23,25 @@ sourceSets {
 dependencies {
     implementation project(':common')
     implementation 'org.xerial:sqlite-jdbc:3.50.3.0'
-    compileOnly 'io.papermc.paper:paper-api:26.2.build.119-stable'
-    compileOnly 'com.sk89q.worldedit:worldedit-bukkit:7.4.5'
+    compileOnly "io.papermc.paper:paper-api:${targetPaperApi}"
+    compileOnly("com.sk89q.worldedit:worldedit-bukkit:${targetWorldEdit}") { transitive = false }
+    compileOnly("com.sk89q.worldedit:worldedit-core:${targetWorldEdit}") { transitive = false }
+    compileOnly("com.sk89q.worldedit.worldedit-libs:core:${targetWorldEdit}") { transitive = false }
+    compileOnly("com.sk89q.worldedit.worldedit-libs:bukkit:${targetWorldEdit}") { transitive = false }
+    if (targetWorldEdit.startsWith('7.4')) {
+        compileOnly 'org.enginehub.lin-bus:lin-bus-tree:0.2.0'
+        compileOnly 'org.enginehub.lin-bus.format:lin-bus-format-snbt:0.2.0'
+    }
     compileOnly sourceSets.faweApi.output
     testImplementation platform('org.junit:junit-bom:6.0.1')
     testImplementation 'org.junit.jupiter:junit-jupiter'
-    testImplementation 'io.papermc.paper:paper-api:26.2.build.119-stable'
-    testImplementation 'com.sk89q.worldedit:worldedit-core:7.4.5'
+    testImplementation "io.papermc.paper:paper-api:${targetPaperApi}"
+    testImplementation("com.sk89q.worldedit:worldedit-core:${targetWorldEdit}") { transitive = false }
+    testImplementation("com.sk89q.worldedit.worldedit-libs:core:${targetWorldEdit}") { transitive = false }
+    if (targetWorldEdit.startsWith('7.4')) {
+        testImplementation 'org.enginehub.lin-bus:lin-bus-tree:0.2.0'
+        testImplementation 'org.enginehub.lin-bus.format:lin-bus-format-snbt:0.2.0'
+    }
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
@@ -35,9 +55,14 @@ tasks.named('shadowJar') {
     mergeServiceFiles()
 }
 
+tasks.named('jar') { archiveClassifier = 'plain' }
+
 processResources {
     inputs.property 'version', project.version
-    filesMatching('plugin.yml') { expand version: project.version }
+    inputs.property 'minecraft', targetMinecraft
+    filesMatching('plugin.yml') { expand version: project.version, minecraft: targetMinecraft }
 }
+
+base { archivesName = "vanillashape-paper-${targetMinecraft}" }
 
 tasks.named('build') { dependsOn tasks.named('shadowJar') }

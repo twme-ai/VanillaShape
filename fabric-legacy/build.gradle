@@ -1,0 +1,110 @@
+plugins {
+    id 'net.fabricmc.fabric-loom-remap'
+    id 'maven-publish'
+}
+
+def targetMinecraft = providers.gradleProperty('legacy_minecraft_version').getOrElse('1.21.11')
+def targetFabricApi = providers.gradleProperty('legacy_fabric_api_version').getOrElse('0.141.6+1.21.11')
+def targetLoader = providers.gradleProperty('legacy_loader_version').getOrElse('0.19.3')
+def submitNodeVersions = ['1.21.9', '1.21.10', '1.21.11']
+def usesSubmitNodes = submitNodeVersions.contains(targetMinecraft)
+def modernClassicVersions = ['1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10']
+def usesModernClassicApi = modernClassicVersions.contains(targetMinecraft)
+def stateModelVersions = ['1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9', '1.21.10']
+def usesStateModel = stateModelVersions.contains(targetMinecraft)
+def earlyApiVersions = ['1.21', '1.21.1']
+def usesEarlyApi = earlyApiVersions.contains(targetMinecraft)
+
+java { toolchain.languageVersion = JavaLanguageVersion.of(21) }
+
+repositories {
+    maven { url = 'https://jitpack.io' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${targetMinecraft}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${targetLoader}"
+    implementation project(':common')
+    include project(':common')
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${targetFabricApi}"
+    testImplementation platform('org.junit:junit-bom:6.0.1')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+def sharedClientSources = fileTree('../fabric/src/main/java') {
+    include 'dev/twme/vanillashape/fabric/ClientInteractionHandler.java'
+    include 'dev/twme/vanillashape/fabric/ShapeGeometry.java'
+}
+
+def commonLegacySources = fileTree('src/main/java') {
+    include 'dev/twme/vanillashape/fabric/ClientBlockStore.java'
+    include 'dev/twme/vanillashape/fabric/LegacyVanillaShapeClient.java'
+    include 'dev/twme/vanillashape/fabric/mixin/LegacyMinecraftMixin.java'
+}
+
+def highLegacySources = usesSubmitNodes ? fileTree('src/high/java') : files()
+def lowLegacySources = usesSubmitNodes ? files() : fileTree('src/low/java')
+
+def lateLegacySources = files(fileTree('src/main/java') {
+    include 'dev/twme/vanillashape/fabric/MinecraftCompat.java'
+    include 'dev/twme/vanillashape/fabric/ModelMaterialResolver.java'
+    include 'dev/twme/vanillashape/fabric/ShapeRenderer.java'
+    include 'dev/twme/vanillashape/fabric/TemplateModelResolver.java'
+}, fileTree('../fabric/src/main/java') {
+    include 'dev/twme/vanillashape/fabric/SyncPayload.java'
+})
+
+def classicSharedSources = fileTree('src/classic/java') {
+    include 'dev/twme/vanillashape/fabric/SyncPayload.java'
+}
+def stateModelSources = fileTree('src/classic/java') {
+    include 'dev/twme/vanillashape/fabric/ModelMaterialResolver.java'
+    include 'dev/twme/vanillashape/fabric/TemplateModelResolver.java'
+}
+def preModelSources = fileTree('src/premodel/java')
+def modernClassicCompat = fileTree('src/classic/java') {
+    include 'dev/twme/vanillashape/fabric/MinecraftCompat.java'
+}
+def oldApiCompat = fileTree('src/oldapi/java')
+def earlyApiCompat = fileTree('src/earlyapi/java')
+def classicSubmitRenderer = fileTree('src/classic/java') {
+    include 'dev/twme/vanillashape/fabric/ShapeRenderer.java'
+}
+def versionSpecificSources = targetMinecraft == '1.21.11'
+        ? lateLegacySources
+        : files(classicSharedSources, usesStateModel ? stateModelSources : preModelSources,
+                usesModernClassicApi ? modernClassicCompat : (usesEarlyApi ? earlyApiCompat : oldApiCompat),
+                usesSubmitNodes ? classicSubmitRenderer : files())
+def allLegacySources = files(commonLegacySources, highLegacySources, lowLegacySources,
+        versionSpecificSources, sharedClientSources)
+
+sourceSets.main.java.setSrcDirs([])
+sourceSets.test.java {
+    srcDir '../fabric/src/test/java'
+    include 'dev/twme/vanillashape/fabric/ClientBlockStoreTest.java'
+    include 'dev/twme/vanillashape/fabric/ShapeGeometryTest.java'
+}
+tasks.named('compileJava') { setSource(allLegacySources) }
+tasks.named('sourcesJar') { from allLegacySources }
+
+tasks.named('test') { useJUnitPlatform() }
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'minecraft', targetMinecraft
+    inputs.property 'rendererMixin', usesSubmitNodes
+    filesMatching('fabric.mod.json') {
+        expand version: project.version, minecraft: targetMinecraft
+    }
+    filesMatching('vanillashape-legacy.mixins.json') {
+        expand rendererMixin: usesSubmitNodes ? ', "LegacyLevelRendererMixin"' : ''
+    }
+}
+
+base { archivesName = "vanillashape-fabric-${targetMinecraft}" }
+
+jar {
+    from(rootProject.file('LICENSE')) { rename { 'LICENSE_VanillaShape' } }
+}

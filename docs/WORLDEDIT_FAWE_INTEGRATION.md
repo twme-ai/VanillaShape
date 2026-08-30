@@ -1,6 +1,6 @@
 # WorldEdit / FastAsyncWorldEdit 整合
 
-實作版本：VanillaShape 0.6.0（2026-08-28）。目前以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
+實作版本：VanillaShape 0.7.0（2026-08-30）。1.21～1.21.11 以 WorldEdit 7.3.4 API 作為最低編譯基線，26.1.1～26.2 以 WorldEdit 7.4.5 API 編譯；完整整合行為另以 WorldEdit 7.4.5、FastAsyncWorldEdit 2.15.4、Paper 26.2 驗證。
 
 ## 使用方式
 

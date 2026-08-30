@@ -6,3 +6,4 @@ run/
 **/logs/
 *.iml
 .server-test/
+dist/

@@ -2,7 +2,7 @@ name: VanillaShape
 version: '${version}'
 main: dev.twme.vanillashape.paper.VanillaShapePlugin
 description: Server authority for resource-pack-free Fabric-rendered shaped blocks
-api-version: '26.2'
+api-version: '${minecraft}'
 authors: [TWME-TW]
 softdepend: [AxiomPaper, WorldEdit, FastAsyncWorldEdit]
 commands:

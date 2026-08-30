@@ -70,7 +70,7 @@ public final class ClientInteractionHandler {
 
     static ClientBlockStore.Hit hit(final Minecraft client, final double range) {
         if (blocks == null || client.player == null || client.level == null) return null;
-        final String world = client.level.dimension().identifier().toString();
+        final String world = MinecraftCompat.worldId(client.level);
         final var custom = blocks.raycast(world, client.player.getEyePosition(),
                 client.player.getViewVector(1), range);
         if (custom == null) return null;

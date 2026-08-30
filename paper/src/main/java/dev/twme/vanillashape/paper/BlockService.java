@@ -234,9 +234,8 @@ final class BlockService {
         final String name = material.name();
         return material == org.bukkit.Material.TORCH || material == org.bukkit.Material.SOUL_TORCH
                 || material == org.bukkit.Material.REDSTONE_TORCH
-                || material == org.bukkit.Material.COPPER_TORCH
                 || material == org.bukkit.Material.TRIPWIRE
-                || material == org.bukkit.Material.CACTUS_FLOWER
+                || name.equals("COPPER_TORCH") || name.equals("CACTUS_FLOWER")
                 || name.endsWith("_SIGN") || name.endsWith("_BANNER")
                 || name.endsWith("_PRESSURE_PLATE");
     }

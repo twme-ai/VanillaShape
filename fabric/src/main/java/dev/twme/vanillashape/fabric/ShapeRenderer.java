@@ -12,7 +12,6 @@ import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.phys.Vec3;
 
 final class ShapeRenderer {
@@ -36,7 +35,7 @@ final class ShapeRenderer {
             final BlockPos pos = new BlockPos(block.x(), block.y(), block.z());
             if (!level.isLoaded(pos)) continue;
             final ModelMaterialResolver.Resolved material = materials.resolve(block.material(), level, pos);
-            final int light = LightCoordsUtil.getLightCoords(level, pos);
+            final int light = MinecraftCompat.light(level, pos);
             final RenderType renderType = material.translucent()
                     ? RenderTypes.entityTranslucent(TextureAtlas.LOCATION_BLOCKS)
                     : RenderTypes.entityCutout(TextureAtlas.LOCATION_BLOCKS);

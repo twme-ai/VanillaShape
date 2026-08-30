@@ -1,11 +1,12 @@
 plugins {
     id 'net.fabricmc.fabric-loom' version '1.17-SNAPSHOT' apply false
+    id 'net.fabricmc.fabric-loom-remap' version '1.17-SNAPSHOT' apply false
     id 'com.gradleup.shadow' version '9.2.2' apply false
 }
 
 allprojects {
     group = 'dev.twme.vanillashape'
-    version = '0.6.0'
+    version = '0.7.0'
 
     repositories {
         mavenCentral()
@@ -19,8 +20,12 @@ subprojects {
             withSourcesJar()
         }
         tasks.withType(JavaCompile).configureEach {
-            options.release = 25
+            options.release = 21
             options.encoding = 'UTF-8'
         }
     }
+}
+
+tasks.register('printVersion') {
+    doLast { println project.version }
 }

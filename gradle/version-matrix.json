@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "fabricLoader": "0.19.3",
+  "versions": [
+    {
+      "minecraft": "1.21",
+      "java": 21,
+      "fabricApi": "0.102.0+1.21",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "baked-model-early",
+      "paper": { "available": true, "api": "1.21-R0.1-SNAPSHOT", "build": 130, "channel": "stable", "worldEdit": "7.3.4" }
+    },
+    {
+      "minecraft": "1.21.1",
+      "java": 21,
+      "fabricApi": "0.116.15+1.21.1",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "baked-model-early",
+      "paper": { "available": true, "api": "1.21.1-R0.1-SNAPSHOT", "build": 133, "channel": "stable", "worldEdit": "7.3.4" }
+    },
+    {
+      "minecraft": "1.21.2",
+      "java": 21,
+      "fabricApi": "0.106.1+1.21.2",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "baked-model",
+      "paper": { "available": false, "reason": "Paper did not publish a 1.21.2 server build." }
+    },
+    {
+      "minecraft": "1.21.3",
+      "java": 21,
+      "fabricApi": "0.114.1+1.21.3",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "baked-model",
+      "paper": { "available": true, "api": "1.21.3-R0.1-SNAPSHOT", "build": 83, "channel": "stable", "worldEdit": "7.3.4" }
+    },
+    {
+      "minecraft": "1.21.4",
+      "java": 21,
+      "fabricApi": "0.119.4+1.21.4",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "baked-model",
+      "paper": { "available": true, "api": "1.21.4-R0.1-SNAPSHOT", "build": 232, "channel": "stable", "worldEdit": "7.3.4" }
+    },
+    {
+      "minecraft": "1.21.5",
+      "java": 21,
+      "fabricApi": "0.128.2+1.21.5",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "block-state-model-old",
+      "paper": { "available": true, "api": "1.21.5-R0.1-SNAPSHOT", "build": 114, "channel": "alpha", "worldEdit": "7.3.4" }
+    },
+    {
+      "minecraft": "1.21.6",
+      "java": 21,
+      "fabricApi": "0.128.2+1.21.6",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "block-state-model",
+      "paper": { "available": true, "api": "1.21.6-R0.1-SNAPSHOT", "build": 48, "channel": "stable", "worldEdit": "7.3.4" }
+    },
+    {
+      "minecraft": "1.21.7",
+      "java": 21,
+      "fabricApi": "0.129.0+1.21.7",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "block-state-model",
+      "paper": { "available": true, "api": "1.21.7-R0.1-SNAPSHOT", "build": 32, "channel": "stable", "worldEdit": "7.3.4" }
+    },
+    {
+      "minecraft": "1.21.8",
+      "java": 21,
+      "fabricApi": "0.136.1+1.21.8",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "block-state-model",
+      "paper": { "available": true, "api": "1.21.8-R0.1-SNAPSHOT", "build": 60, "channel": "stable", "worldEdit": "7.3.4" }
+    },
+    {
+      "minecraft": "1.21.9",
+      "java": 21,
+      "fabricApi": "0.134.1+1.21.9",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "submit-node-packed-quad",
+      "paper": { "available": true, "api": "1.21.9-R0.1-SNAPSHOT", "build": 59, "channel": "alpha", "worldEdit": "7.3.4" }
+    },
+    {
+      "minecraft": "1.21.10",
+      "java": 21,
+      "fabricApi": "0.138.4+1.21.10",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "submit-node-packed-quad",
+      "paper": { "available": true, "api": "1.21.10-R0.1-SNAPSHOT", "build": 130, "channel": "stable", "worldEdit": "7.3.4" }
+    },
+    {
+      "minecraft": "1.21.11",
+      "java": 21,
+      "fabricApi": "0.141.6+1.21.11",
+      "fabricProject": "fabric-legacy",
+      "fabricBand": "submit-node-record-quad",
+      "paper": { "available": true, "api": "1.21.11-R0.1-SNAPSHOT", "build": 132, "channel": "stable", "worldEdit": "7.3.4" }
+    },
+    {
+      "minecraft": "26.1",
+      "java": 25,
+      "fabricApi": "0.145.1+26.1",
+      "fabricProject": "fabric",
+      "fabricBand": "unobfuscated-26x",
+      "paper": { "available": false, "reason": "Paper did not publish a 26.1 server build." }
+    },
+    {
+      "minecraft": "26.1.1",
+      "java": 25,
+      "fabricApi": "0.145.4+26.1.1",
+      "fabricProject": "fabric",
+      "fabricBand": "unobfuscated-26x",
+      "paper": { "available": true, "api": "26.1.1.build.29-alpha", "build": 29, "channel": "alpha", "worldEdit": "7.4.5" }
+    },
+    {
+      "minecraft": "26.1.2",
+      "java": 25,
+      "fabricApi": "0.155.2+26.1.2",
+      "fabricProject": "fabric",
+      "fabricBand": "unobfuscated-26x",
+      "paper": { "available": true, "api": "26.1.2.build.74-stable", "build": 74, "channel": "stable", "worldEdit": "7.4.5" }
+    },
+    {
+      "minecraft": "26.2",
+      "java": 25,
+      "fabricApi": "0.158.0+26.2",
+      "fabricProject": "fabric",
+      "fabricBand": "unobfuscated-26x",
+      "paper": { "available": true, "api": "26.2.build.121-stable", "build": 121, "channel": "stable", "worldEdit": "7.4.5" }
+    }
+  ]
+}

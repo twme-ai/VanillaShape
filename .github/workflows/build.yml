@@ -8,21 +8,26 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  version-matrix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
           java-version: '25'
       - uses: gradle/actions/setup-gradle@v5
-      - run: ./gradlew clean build
+      - name: Build every supported Minecraft version
+        run: |
+          ./gradlew clean
+          ./scripts/build-matrix.sh all
+      - name: Verify metadata, bytecode and bundled dependencies
+        run: ./scripts/verify-artifacts.sh
       - uses: actions/upload-artifact@v7
         with:
           name: VanillaShape-${{ github.sha }}
-          path: |
-            paper/build/libs/paper-*.jar
-            !paper/build/libs/*-sources.jar
-            fabric/build/libs/fabric-*.jar
-            !fabric/build/libs/*-sources.jar
+          path: dist/

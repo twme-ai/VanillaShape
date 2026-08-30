@@ -7,4 +7,4 @@ pluginManagement {
 }
 
 rootProject.name = 'VanillaShape'
-include 'common', 'paper', 'fabric'
+include 'common', 'paper', 'fabric', 'fabric-legacy'

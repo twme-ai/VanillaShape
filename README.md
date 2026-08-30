@@ -2,7 +2,7 @@
 
 VanillaShape 是一套配對使用的 **PaperMC 插件 + Fabric 客戶端模組**。Paper 是特殊方塊的唯一資料來源，Fabric 則直接重用 Minecraft 已載入的原版方塊模型與紋理 atlas 來顯示形狀，因此玩家不需要安裝或下載資源包。
 
-目前目標版本為 Minecraft / Paper / Fabric `26.2`，需要 Java 25。
+正式支援 Minecraft `1.21` 至 `26.2` 的所有已發布客戶端版本。Fabric 共提供 16 個逐版編譯的模組；Paper 官方沒有發布 `1.21.2` 與 `26.1` 伺服器，因此這兩版只有 Fabric 成品，其餘 14 版皆提供配對的 Paper 插件。Minecraft 1.21～1.21.11 使用 Java 21，26.1～26.2 使用 Java 25。
 
 ## 功能
 
@@ -23,7 +23,7 @@ VanillaShape 是一套配對使用的 **PaperMC 插件 + Fabric 客戶端模組*
 - 門、地板門、柵欄門及通用模型中的門／按鈕／拉桿／可點燃狀態可以右鍵互動；按鈕會自動復位。
 - `/vshape replacemode` 可切換右鍵材質替換模式，保留目標形狀與狀態，只套用主手方塊材質。
 - 安裝 Axiom 時會透過官方 AxiomClientAPI 加入 `VanillaShape` 與 `VanillaShape Clipboard` Editor 工具；可放置、替換、刪除、兩角選取、複製與批次貼上特殊方塊。
-- 可選整合 WorldEdit 7.4.5 或 FastAsyncWorldEdit 2.15.4：九種 `vanillashape:*` 方塊會進入參數補全，並支援 set、replace、mask、copy/cut/paste、旋轉／鏡像、Sponge v3 schematic、undo/redo，以及對虛擬方塊使用各種物品綁定工具。
+- 可選整合相應 Minecraft 版本可用的 WorldEdit／FastAsyncWorldEdit：九種 `vanillashape:*` 方塊會進入參數補全，並支援 set、replace、mask、copy/cut/paste、旋轉／鏡像、Sponge v3 schematic、undo/redo，以及對虛擬方塊使用各種物品綁定工具。WorldEdit API 以 1.21 系列的 7.3.4 與 26.x 的 7.4.5 作為二進位相容基線。
 - 直立半磚使用與原版樓梯一致的相對狀態：`straight`、`inner_left`、`inner_right`、`outer_left`、`outer_right`。Paper 會在相鄰方塊變更時重新計算狀態。
 - 直立半磚貼在側面時會靠向被點擊的支撐方塊；點擊頂面或底面時依命中位置選擇東／西／南／北半，中央位置則依玩家朝向決定。放置後會像樓梯一樣自動形成內外角。
 - 依需求，目前特殊方塊只有顯示效果，**沒有伺服器碰撞箱**；Paper 世界中的對應位置保持空氣。
@@ -46,12 +46,34 @@ flowchart LR
 
 ## 安裝
 
-1. 在 Paper 26.2 伺服器安裝 `paper/build/libs/paper-0.6.0.jar`。
-2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、Fabric API 及 `fabric/build/libs/fabric-0.6.0.jar`。
+1. 從 Release 下載與伺服器 Minecraft **完全相同版本**的 `vanillashape-paper-<minecraft>-0.7.0.jar`，放進 Paper 的 `plugins/`。
+2. 每位需要看見與操作特殊方塊的玩家安裝 Fabric Loader、該 Minecraft 版本的 Fabric API，以及 `vanillashape-fabric-<minecraft>-0.7.0.jar`。
 3. 啟動伺服器。資料庫會建立於 `plugins/VanillaShape/blocks.db`。
+
+| Minecraft | Fabric | Paper 官方伺服器 | Java |
+|---|---:|---:|---:|
+| 1.21 | ✓ | build 130 stable | 21 |
+| 1.21.1 | ✓ | build 133 stable | 21 |
+| 1.21.2 | ✓ | 未發布 | 21 |
+| 1.21.3 | ✓ | build 83 stable | 21 |
+| 1.21.4 | ✓ | build 232 stable | 21 |
+| 1.21.5 | ✓ | build 114 alpha | 21 |
+| 1.21.6 | ✓ | build 48 stable | 21 |
+| 1.21.7 | ✓ | build 32 stable | 21 |
+| 1.21.8 | ✓ | build 60 stable | 21 |
+| 1.21.9 | ✓ | build 59 alpha | 21 |
+| 1.21.10 | ✓ | build 130 stable | 21 |
+| 1.21.11 | ✓ | build 132 stable | 21 |
+| 26.1 | ✓ | 未發布 | 25 |
+| 26.1.1 | ✓ | build 29 alpha | 25 |
+| 26.1.2 | ✓ | build 74 stable | 25 |
+| 26.2 | ✓ | build 121 stable | 25 |
+
+每個 Fabric JAR 都鎖定單一 Minecraft 版本，不能跨版混用。Paper 欄的「未發布」是上游沒有可安裝的 Paper build，並非缺少已存在版本的 VanillaShape 成品。
 
 若同時使用 Axiom：
 
+- Axiom 5.5.0 與 AxiomClientAPI 2.0.1 目前只針對 Minecraft 26.2 發布及驗證；VanillaShape 在其他版本會安全略過 Axiom 客戶端工具註冊，其餘功能不受影響。
 - 客戶端照常安裝閉源 `Axiom` 模組；它已內含 AxiomClientAPI，不需要再手動安裝 API JAR。
 - 伺服器可同時安裝 [AxiomPaperPlugin](https://github.com/Moulberry/AxiomPaperPlugin)。VanillaShape 以 `softdepend` 共存，且 Axiom 工具操作會額外遵守 `axiom.editor.use` 與 `axiom.build.place`。
 - VanillaShape 是獨立資料層，沒有占用原版 BlockState 作為 carrier；因此請使用 Editor 內的 `VanillaShape` 工具編輯單格，或以 `VanillaShape Clipboard` 複製／貼上選區。
@@ -203,15 +225,22 @@ Fabric 會把虛擬方塊的精確命中座標送到 Paper，再交給目前綁�
 ## 編譯與測試
 
 ```bash
-./gradlew clean build
+./scripts/build-matrix.sh all
+./scripts/verify-artifacts.sh
+./scripts/test-paper-matrix.sh
+# 需要 xvfb；啟動八個 Fabric API 分界版到主選單
+./scripts/test-fabric-smoke.sh
 ```
 
-產物：
+第一個指令逐版編譯並執行測試；第二個檢查版本 metadata、Java bytecode、共用協定與 shaded SQLite；第三個從 Paper 官方 Fill 下載矩陣中 14 個真實伺服器 build，逐一啟動、載入插件、建立 SQLite 並正常關服；第四個在虛擬顯示器啟動八個 Fabric API／模型／渲染分界版至主選單，偵測 entrypoint 與 mixin linkage。若只要開發時快速檢查預設目標，可執行 `./gradlew clean build`。
 
-- Paper：`paper/build/libs/paper-0.6.0.jar`（已內含 relocated SQLite JDBC）
-- Fabric：`fabric/build/libs/fabric-0.6.0.jar`
+完整產物位於 `dist/`：
 
-測試涵蓋雙向 wire protocol、Axiom 選區／貼上座標安全、任意模型資料、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、原版牆狀態、外表面聯集、直立半磚方向與內外角、柵欄門幾何、neutral overlay、虛擬幾何 raycast，以及 WorldEdit／FAWE 的 proxy、mask、history、磁碟 clipboard、真實玩家指令事件、即時貼上修補、虛擬 block/trace 工具、旋轉、schematic 和批次寫入。協定已升級為 v7；Paper 與 Fabric 必須一起更新至 0.6.0。
+- Paper：`vanillashape-paper-<minecraft>-0.7.0.jar`（14 個，已內含 relocated SQLite JDBC）
+- Fabric：`vanillashape-fabric-<minecraft>-0.7.0.jar`（16 個）
+- 校驗：`SHA256SUMS`
+
+測試涵蓋雙向 wire protocol、Axiom 選區／貼上座標安全、任意模型資料、版本與尾端資料拒絕、放置面與命中位置驗證、除錯棒狀態 schema、原版牆狀態、外表面聯集、直立半磚方向與內外角、柵欄門幾何、neutral overlay、虛擬幾何 raycast，以及 WorldEdit／FAWE 的 proxy、mask、history、磁碟 clipboard、真實玩家指令事件、即時貼上修補、虛擬 block/trace 工具、旋轉、schematic 和批次寫入。協定為 v7；Paper 與 Fabric 必須使用相同 Minecraft 目標與 0.7.0 版本。
 
 ## 已知限制與下一步
 

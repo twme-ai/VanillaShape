@@ -39,9 +39,15 @@ public final class VanillaShapeClient implements ClientModInitializer {
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> blocks.clear());
         LevelRenderEvents.COLLECT_SUBMITS.register(renderer::render);
-        if (FabricLoader.getInstance().isModLoaded("axiom")) {
+        if (FabricLoader.getInstance().isModLoaded("axiom") && supportsAxiom()) {
             ClientLifecycleEvents.CLIENT_STARTED.register(client -> AxiomIntegration.initialize(LOGGER, blocks));
         }
         LOGGER.info("VanillaShape client renderer initialized (no resource pack required).");
+    }
+
+    private static boolean supportsAxiom() {
+        return FabricLoader.getInstance().getModContainer("minecraft")
+                .map(container -> container.getMetadata().getVersion().getFriendlyString())
+                .filter("26.2"::equals).isPresent();
     }
 }
